@@ -1,0 +1,1140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="UAV-LiDAR pilot plots P1-P4 at Khao Krachom, Ratchaburi, Thailand: point clouds, DTMs, orthophotos and draft species lists.">
+<title>Pilot Plots in 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500&display=swap">
+<style>
+/* Layout: instrument view. 3D viewport fills the left, a narrow survey-sheet panel on the right; stacks on phones. */
+:root {
+  --bg: #f3f5f1;
+  --panel: #ffffff;
+  --ink: #1d2620;
+  --muted: #5b675f;
+  --line: #d6ddd5;
+  --viewport: #e9ede7;
+  --accent: #e0642a;          /* survey-tape orange */
+  --accent-ink: #ffffff;
+  --chip: #eef2ec;
+  --font-body: "IBM Plex Sans", "IBM Plex Sans Thai", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", "IBM Plex Sans Thai", ui-monospace, Menlo, monospace;
+  --s1: 0.75rem; --s2: 0.875rem; --s3: 1rem; --s4: 1.25rem; --s5: 1.6rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111613; --panel: #171e19; --ink: #e3e9e2; --muted: #95a399; --line: #2b352e;
+    --viewport: #0b0f0c; --accent: #f07a3e; --accent-ink: #160b05; --chip: #202a23; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111613; --panel: #171e19; --ink: #e3e9e2; --muted: #95a399; --line: #2b352e;
+  --viewport: #0b0f0c; --accent: #f07a3e; --accent-ink: #160b05; --chip: #202a23; color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: var(--s2);
+  line-height: 1.5;
+}
+.app {
+  display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 0; height: 100%;
+}
+.view { position: relative; min-width: 0; background: var(--viewport); }
+#c { display: block; width: 100%; height: 100%; touch-action: none; }
+.hud {
+  position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); top: 12px;
+  display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+}
+.hud .name { font-weight: 600; font-size: var(--s5); letter-spacing: -0.01em; }
+.hud .sub { color: var(--muted); font-size: var(--s1); font-family: var(--font-data); }
+.legend {
+  position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: 12px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; font-size: var(--s1); max-width: calc(100% - 24px);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.legend .ttl { font-weight: 500; }
+.ramp { height: 8px; border-radius: 2px; width: 220px; max-width: 100%; }
+.ramp-l { display: flex; justify-content: space-between; font-family: var(--font-data); color: var(--muted); width: 220px; max-width: 100%; }
+.swatches { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.swatches span { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-data); }
+.swatches i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.status {
+  position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted);
+  font-family: var(--font-data); font-size: var(--s1); pointer-events: none;
+}
+aside {
+  background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto;
+  padding-block: 18px 28px; padding-left: 20px; padding-right: max(20px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 22px;
+}
+h1 { font-size: var(--s4); margin: 0; font-weight: 600; text-wrap: balance; }
+.lede { color: var(--muted); margin: 4px 0 0; }
+h2 {
+  font-size: var(--s1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  margin: 0 0 8px; font-weight: 500;
+}
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button {
+  font: inherit; font-size: var(--s1); font-family: var(--font-data); border: 1px solid var(--line);
+  background: var(--chip); color: var(--ink); border-radius: 4px; padding: 5px 9px; cursor: pointer;
+}
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: var(--s1); }
+.row label { color: var(--muted); }
+input[type="range"] { accent-color: var(--accent); width: 140px; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: var(--s1); margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.bars { display: flex; flex-direction: column; gap: 5px; }
+.bar { display: grid; grid-template-columns: 62px 1fr 46px; align-items: center; gap: 8px; font-size: var(--s1); }
+.bar .k { font-family: var(--font-data); color: var(--muted); }
+.bar .t { height: 9px; background: var(--chip); border-radius: 2px; overflow: hidden; }
+.bar .t b { display: block; height: 100%; }
+.bar .v { font-family: var(--font-data); text-align: right; font-variant-numeric: tabular-nums; }
+table { border-collapse: collapse; width: 100%; font-size: var(--s1); }
+th, td { text-align: left; padding: 4px 6px 4px 0; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; }
+td.n { font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: right; }
+.note { color: var(--muted); font-size: var(--s1); margin: 6px 0 0; }
+.links { display: flex; flex-direction: column; gap: 6px; font-size: var(--s1); }
+.links div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-bottom: 1px dashed var(--line); padding-bottom: 5px; }
+.links span:last-child { font-family: var(--font-data); color: var(--muted); text-align: right; }
+.filebtn { display: inline-block; font-size: var(--s1); font-family: var(--font-data); border: 1px solid var(--accent); color: var(--accent); border-radius: 4px; padding: 5px 10px; cursor: pointer; }
+#herpFile { position: absolute; width: 1px; height: 1px; opacity: 0; }
+#herpFile:focus-visible + .note, .filebtn:focus-within { outline: 2px solid var(--accent); }
+code { font-family: var(--font-data); font-size: 0.95em; }
+.flag { display: inline-block; font-size: 0.7rem; font-family: var(--font-data); background: var(--accent); color: var(--accent-ink); border-radius: 3px; padding: 0 5px; margin-left: 6px; vertical-align: 2px; }
+.spcards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.spcards button { font: inherit; text-align: left; border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 6px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.spcards button:hover { border-color: var(--accent); }
+.spcards b { font-size: var(--s5); font-family: var(--font-data); line-height: 1.1; }
+.spcards .nm { color: var(--ink); font-size: var(--s1); font-weight: 600; }
+.spcards span { font-size: var(--s1); color: var(--muted); line-height: 1.3; }
+.badge { display: inline-block; font-size: 0.7rem; font-family: var(--font-data); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+.b-lit { background: var(--accent); color: var(--accent-ink); }
+.b-mock { border: 1px solid #c0392b; color: #c0392b; }
+:root[data-theme="dark"] .b-mock { border-color: #ff8a7a; color: #ff8a7a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .b-mock { border-color: #ff8a7a; color: #ff8a7a; } }
+dialog#spDlg { width: min(1040px, calc(100vw - 24px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); }
+dialog#orthoDlg::backdrop, dialog#spDlg::backdrop { background: rgba(10, 14, 12, 0.45); }
+.dlg { display: flex; flex-direction: column; max-height: calc(100vh - 34px); }
+.dlg-h { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.dlg-top { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.dlg-top h3 { margin: 0; font-size: var(--s4); }
+.dlg-x { font: inherit; font-size: var(--s3); border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 4px; padding: 2px 10px; cursor: pointer; }
+.dlg-ctl { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.dlg-ctl input[type="search"] { font: inherit; font-size: var(--s1); padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); min-width: 180px; }
+.dlg-b { overflow: auto; padding: 0 16px; }
+.dlg-b table { min-width: 760px; }
+.dlg-b th { position: sticky; top: 0; background: var(--panel); padding-top: 8px; }
+.dlg-b td { vertical-align: top; }
+.dlg-b .sci { font-style: italic; }
+.dlg-b .sub { color: var(--muted); font-size: 0.92em; }
+.dlg-f { padding: 10px 16px 14px; border-top: 1px solid var(--line); }
+@media (max-width: 820px) {
+  .app { grid-template-columns: 1fr; height: auto; }
+  .view { height: 62vh; min-height: 340px; }
+  aside { border-left: 0; border-top: 1px solid var(--line); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+}
+</style>
+</head>
+<body>
+
+
+<div class="app">
+  <div class="view">
+    <canvas id="c" aria-label="3D point cloud of the selected pilot plot" data-i18n-aria="canvas"></canvas>
+    <div class="hud"><div class="name" id="hudName">P1</div><div class="sub" id="hudSub"></div></div>
+    <div class="legend" id="legend"></div>
+    <div class="status" id="status" data-i18n="loading">Loading point cloud…</div>
+  </div>
+
+  <aside>
+    <header>
+      <div class="seg" id="langSeg" role="group" aria-label="Language / ภาษา" style="margin-bottom:10px">
+        <button data-v="th" aria-pressed="false" lang="th">ไทย</button>
+        <button data-v="en" aria-pressed="true" lang="en">English</button>
+      </div>
+      <h1 data-i18n="h1">Pilot plots P1–P4, UAV-LiDAR, Aug 2026</h1>
+      <p class="lede" data-i18n="lede">Real L1 point clouds (thinned for the browser) with the four DTMs. Drag to orbit, scroll or pinch to zoom.</p>
+    </header>
+
+    <section>
+      <h2 data-i18n="hPlot">Plot</h2>
+      <div class="seg" id="plotSeg"></div>
+    </section>
+
+    <section>
+      <h2 data-i18n="hColor">Colour points by</h2>
+      <div class="seg" id="colorSeg">
+        <button data-v="strata" aria-pressed="true" data-i18n="cStrata">Height strata</button>
+        <button data-v="hag" aria-pressed="false" data-i18n="cHag">Height above ground</button>
+        <button data-v="elev" aria-pressed="false" data-i18n="cElev">Elevation</button>
+        <button data-v="ortho" aria-pressed="false" data-i18n="cOrtho">True colour (ortho)</button>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="hDtm">Ground surface (DTM)</h2>
+      <div class="seg" id="dtmSeg"></div>
+      <p class="note" id="dtmNote"></p>
+    </section>
+
+    <section>
+      <h2 data-i18n="hView">View</h2>
+      <div class="row" style="margin-bottom:6px"><span style="color:var(--muted)" data-i18n="lOrtho">Orthophoto</span></div>
+      <div class="seg" id="orthoSeg" style="margin-bottom:6px">
+        <button data-v="off" aria-pressed="true" data-i18n="oOff">Off</button>
+        <button data-v="flat" aria-pressed="false" data-i18n="oFlat">Flat photo</button>
+        <button data-v="surface" aria-pressed="false" data-i18n="oSurf">On canopy surface</button>
+      </div>
+      <div class="seg" style="margin-bottom:6px">
+        <button id="topView" data-i18n="topView">View from above</button>
+        <button id="orthoFull" data-i18n="orthoFull">Open full photo</button>
+      </div>
+      <p class="note" id="orthoNote" style="margin:0 0 10px"></p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="row"><label for="ptSize" data-i18n="lSize">Point size</label><input id="ptSize" type="range" min="0.4" max="3" step="0.1" value="1.2"></div>
+        <div class="row"><label for="exag" data-i18n="lExag">Vertical exaggeration</label><input id="exag" type="range" min="1" max="3" step="0.5" value="1"></div>
+        <div class="row"><label for="showPts" data-i18n="lPts">Show points</label><input id="showPts" type="checkbox" checked></div>
+        <div class="row"><label for="showRing" data-i18n="lRing">Camera and 25 / 50 m rings</label><input id="showRing" type="checkbox" checked></div>
+        <div class="row"><label for="showProp" data-i18n="lProp">Proposed herp points</label><input id="showProp" type="checkbox" checked></div>
+        <div class="row"><label for="showChan" data-i18n="lChan">Drainage lines (from DTM)</label><input id="showChan" type="checkbox" checked></div>
+        <div class="row"><label for="showHerp" data-i18n="lHerp">Herp points from file</label><input id="showHerp" type="checkbox" checked></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="hFacts">Plot facts</h2>
+      <dl class="facts" id="facts"></dl>
+    </section>
+
+    <section>
+      <h2 data-i18n="hCam">Camera trap</h2>
+      <dl class="facts" id="camFacts"></dl>
+      <div style="overflow-x:auto;margin-top:8px"><table id="camTable"></table></div>
+      <p class="note" data-i18n="camNote">LiDAR values inside the 25 m and 50 m buffers around the camera, from camera_buffer_metrics.csv (Aug 2026 flights). These are the numbers one camera site contributes to the mammal model.</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="hHerp">Herp survey points</h2>
+      <p class="note" style="margin:0 0 8px" data-i18n="propNote">Proposed sites (teal) on low ground next to drainage lines inferred from the CSF DTM: lowest 30% of the plot, lower than the ground within 15 m, ≤10 m from a channel, ≥30 m apart. Check each one in the field.</p>
+      <div style="overflow-x:auto;margin-bottom:10px"><table id="herpTable"></table></div>
+      <p class="note" id="herpNote" style="margin:0 0 8px" data-i18n="herpNote">Records from the published PhD study have not been received yet. Load them here when they arrive.</p>
+      <label class="filebtn" for="herpFile" data-i18n="herpBtn">Load herp points (CSV)</label>
+      <input id="herpFile" type="file" accept=".csv,text/csv">
+      <p class="note" data-i18n="herpCols">Columns: <code>easting,northing</code> in EPSG:32647, optional <code>label</code>. The file is read in this browser only and is not uploaded, so sensitive species stay off the page.</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="hSp">Species lists</h2>
+      <div class="spcards" id="spCards"></div>
+      <button class="filebtn" id="spThisPlot" style="margin-top:8px;background:transparent;font:inherit;font-size:var(--s1)"></button>
+      <p class="note" data-i18n="spNote"></p>
+    </section>
+
+    <section>
+      <h2 data-i18n="hStrata">Share of first returns by height (covariate bins)</h2>
+      <div class="bars" id="strataBars"></div>
+      <p class="note" data-i18n="strataNote">Bins are the ones fixed in plan v5.1 §8. Values from the pilot canopy metrics table.</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="hAgree">DTM agreement (pilot table, 0.5 m)</h2>
+      <div style="overflow-x:auto"><table id="dtmTable"></table></div>
+      <p class="note" data-i18n="agreeNote">NMAD and 95th percentile of |Δz| in metres. The P4 repeat flight (CSF, 15 vs 17 Aug) gives the measurement-noise floor: NMAD 0.13 m.</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="hModel">Where these values go in the model</h2>
+      <div class="links">
+        <div><span data-i18n="m1a">Canopy cover, height p95</span><span data-i18n="m1b">canopy birds, arboreal mammals</span></div>
+        <div><span data-i18n="m2a">Returns 0–2 m, 2–5 m</span><span data-i18n="m2b">ground and understorey birds, ground mammals</span></div>
+        <div><span data-i18n="m3a">Vertical diversity (5–30 m)</span><span data-i18n="m3b">midstorey birds</span></div>
+        <div><span data-i18n="m4a">Slope, TPI, TWI, drainage (from the DTM)</span><span data-i18n="m4b">herps, ground mammals</span></div>
+      </div>
+      <p class="note" data-i18n="modelNote">Each count point or camera gets these values averaged inside the orange 50 m ring around it. Choosing a different DTM moves every height value and every terrain variable, which is why the ground-filter comparison feeds the sensitivity analysis.</p>
+    </section>
+  </aside>
+</div>
+
+<dialog id="orthoDlg" aria-labelledby="orthoTitle" style="width:min(1100px,calc(100vw - 24px));max-height:calc(100vh - 32px);padding:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink)">
+  <div class="dlg">
+    <div class="dlg-h"><div class="dlg-top"><h3 id="orthoTitle"></h3><button class="dlg-x" id="orthoClose" data-i18n="close">Close</button></div></div>
+    <div class="dlg-b" style="padding:12px 16px;display:grid;place-items:center"><img id="orthoImg" alt="" style="max-width:100%;max-height:calc(100vh - 190px);object-fit:contain;border-radius:4px"></div>
+    <div class="dlg-f"><p class="note" style="margin:0" id="orthoCap"></p></div>
+  </div>
+</dialog>
+<dialog id="spDlg" aria-labelledby="spTitle">
+  <div class="dlg">
+    <div class="dlg-h">
+      <div class="dlg-top"><h3 id="spTitle" data-i18n="spTitle">Species lists</h3><button class="dlg-x" id="spClose" data-i18n="close">Close</button></div>
+      <div class="dlg-ctl">
+        <div class="seg" id="spGroup">
+          <button data-v="bird" data-i18n="gBird">Birds</button>
+          <button data-v="mm" data-i18n="gMm">Mammals</button>
+          <button data-v="herp" data-i18n="gHerp">Herps</button>
+        </div>
+        <div class="seg" id="spFilter">
+          <button data-v="all" data-i18n="fAll">All</button>
+          <button data-v="lit" data-i18n="fLit">Recorded</button>
+          <button data-v="both" data-i18n="fBoth">In both</button>
+          <button data-v="mock" data-i18n="fMock">MOCK only</button>
+        </div>
+        <div class="seg" id="spPlot">
+          <button data-v="all" data-i18n="pAll">All plots</button>
+          <button data-v="P1">P1</button><button data-v="P2">P2</button><button data-v="P3">P3</button><button data-v="P4">P4</button>
+        </div>
+        <input type="search" id="spSearch" data-i18n-ph="search">
+      </div>
+      <p class="note" id="spCount" style="margin:0"></p>
+      <p class="note" id="spPlotNote" style="margin:0" data-i18n="spPlotNote"></p>
+    </div>
+    <div class="dlg-b"><table id="spTable"></table></div>
+    <div class="dlg-f"><p class="note" style="margin:0" data-i18n="spFoot"></p></div>
+  </div>
+</dialog>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+/* ---------------- data from the pilot processing ---------------- */
+const META = {"P1": {"n": 240000, "grid_offset": 1920000, "grid_w": 102, "grid_h": 102, "grid_cell": 2.0, "filters": ["csf", "pmf", "smrf", "terra"], "width": 205.5, "height": 204.0, "zrange": [0, 76.07258447265622], "centre": [102.9, 102.0], "dtm_relief": 46.20232009887695, "hag_p99": 45.237040000000036}, "P2": {"n": 240000, "grid_offset": 1920000, "grid_w": 102, "grid_h": 101, "grid_cell": 2.0, "filters": ["csf", "pmf", "smrf"], "width": 205.0, "height": 203.5, "zrange": [0, 88.4154267578125], "centre": [102.5, 101.6], "dtm_relief": 63.95523452758789, "hag_p99": 30.532040000000038}, "P3": {"n": 240000, "grid_offset": 1920000, "grid_w": 102, "grid_h": 102, "grid_cell": 2.0, "filters": ["csf", "pmf", "smrf", "terra"], "width": 204.5, "height": 205.5, "zrange": [0, 72.59943701171875], "centre": [102.1, 102.5], "dtm_relief": 56.52867889404297, "hag_p99": 23.684}, "P4_E1": {"n": 200000, "grid_offset": 1600000, "grid_w": 68, "grid_h": 158, "grid_cell": 2.0, "filters": ["csf", "pmf", "smrf", "terra"], "width": 137.0, "height": 317.5, "zrange": [0, 31.520868164062506], "centre": [66.3, 155.7], "dtm_relief": 11.011425971984863, "hag_p99": 25.30901000000001}, "P4_E2": {"n": 200000, "grid_offset": 1600000, "grid_w": 68, "grid_h": 158, "grid_cell": 2.0, "filters": ["csf", "pmf", "smrf", "terra"], "width": 137.0, "height": 317.0, "zrange": [0, 31.21957409667968], "centre": [62.3, 157.4], "dtm_relief": 8.704270362854004, "hag_p99": 25.103010000000012}};
+const PLOTS = {
+  P1:    { label: "P1", forest: "Hill evergreen (summit)", note: "Single flight direction", flag: "1 direction",
+           metrics: {cover2: .9687, cover5: .8578, hp95: 35.48, chm95: 37.33, s: [.0313,.1109,.2161,.1632+.1691,.1261+.0818,.1015]} },
+  P2:    { label: "P2", forest: "Dry evergreen", note: "Cross-hatch, 2 directions",
+           metrics: {cover2: .9862, cover5: .9646, hp95: 24.51, chm95: 26.60, s: [.0138,.0216,.1205,.3518+.3261,.1225+.0311,.0127]} },
+  P3:    { label: "P3", forest: "Mixed deciduous", note: "Cross-hatch, GCPs surveyed",
+           metrics: {cover2: .9781, cover5: .9629, hp95: 21.70, chm95: 22.61, s: [.0219,.0152,.0899,.3513+.4074,.1114+.0030,0]} },
+  P4_E1: { label: "P4 · 15 Aug", forest: "Community forest area", note: "Repeat flight, epoch 1",
+           metrics: {cover2: .8109, cover5: .6668, hp95: 24.12, chm95: 24.48, s: [.1891,.1441,.0997,.1299+.2070,.2147+.0155,0]} },
+  P4_E2: { label: "P4 · 17 Aug", forest: "Community forest area", note: "Repeat flight, epoch 2",
+           metrics: {cover2: .8036, cover5: .6418, hp95: 24.18, chm95: 24.63, s: [.1964,.1618,.1090,.1160+.1909,.2092+.0166,0]} },
+};
+const AGREE = {
+  P1: [["CSF vs Terra",.551,3.85],["SMRF vs Terra",.481,2.797],["CSF vs SMRF",.641,4.765]],
+  P2: [["CSF vs SMRF",.003,2.069]],
+  P3: [["CSF vs Terra",.049,.992],["SMRF vs Terra",.001,.433],["CSF vs SMRF",0,.987]],
+  P4_E1: [["CSF vs Terra",.036,.678],["SMRF vs Terra",.003,2.678],["CSF vs SMRF",0,2.679]],
+  P4_E2: [["CSF vs Terra",0,.283],["SMRF vs Terra",0,.271],["CSF vs SMRF",0,.157]],
+};
+// lower-left corner of each plot's DTM grid (EPSG:32647), used to place UTM points in the local frame
+const ORIGIN = { P1: [521099.0, 1499603.0], P2: [522376.0, 1499092.0], P3: [523555.0, 1499659.0],
+                 P4_E1: [524958.0, 1501617.0], P4_E2: [524959.0, 1501619.0] };
+// Data/Camera/cameras.csv (all placeholders: deepest interior point of the plot)
+const CAMS = { P1: ["CAM-P1", 521201.75, 1499704.75], P2: ["CAM-P2", 522478.25, 1499193.75],
+               P3: ["CAM-P3", 523657.75, 1499761.25], P4_E1: ["CAM-P4", 525027.25, 1501731.25], P4_E2: ["CAM-P4", 525027.25, 1501731.25] };
+// Data/Processed/Camera/camera_buffer_metrics.csv: [run, radius, cover_2m, s0_2, s2_5, s5_10, s10_20, s20_30, h_p95]
+const BUF = {
+  P1: [["wet_2026",25,.9923,.0077,.0624,.1919,.6183,.1164,25.16],["wet_2026",50,.9712,.0288,.1153,.2295,.4277,.1277,33.77]],
+  P2: [["wet_2026",25,.9897,.0103,.0126,.1191,.7371,.1172,23.06],["wet_2026",50,.9876,.0124,.0148,.1051,.7422,.1245,23.04]],
+  P3: [["wet_2026",25,.9880,.0120,.0043,.0579,.8213,.1045,21.70],["wet_2026",50,.9695,.0305,.0162,.0876,.7228,.1428,22.21]],
+  P4: [["wet_2026",25,.9992,.0008,.0131,.0164,.2321,.7376,25.06],["wet_2026",50,.9034,.0966,.1803,.0644,.2730,.3857,24.56],
+       ["test_repeat_2026",25,.9960,.0040,.0185,.0324,.3092,.6358,24.80],["test_repeat_2026",50,.8896,.1104,.1651,.0717,.2932,.3596,24.44]],
+};
+// proposed herp survey points (propose_herp_points.py): [id, E, N, elevation percentile, TPI m, TWI, upslope m2]
+const HERP_PROP = {"P1": [["H-P1-01", 521151.5, 1499615.5, 0, -3.54, 12.13, 20668], ["H-P1-02", 521146.5, 1499658.5, 1, -2.82, 11.85, 12370], ["H-P1-03", 521128.5, 1499740.5, 5, -4.82, 9.27, 2845], ["H-P1-04", 521142.5, 1499700.5, 2, -2.87, 9.61, 958], ["H-P1-05", 521288.5, 1499758.5, 11, -2.08, 10.23, 2169]], "P2": [["H-P2-01", 522567.5, 1499207.0, 0, -4.17, 12.85, 32239], ["H-P2-02", 522451.5, 1499233.0, 26, -2.8, 12.97, 6127], ["H-P2-03", 522493.5, 1499217.0, 13, -2.25, 12.44, 10170], ["H-P2-04", 522473.5, 1499174.0, 13, -3.59, 11.53, 8847], ["H-P2-05", 522522.5, 1499196.0, 5, -0.98, 12.33, 25464]], "P3": [["H-P3-01", 523708.5, 1499759.0, 2, -1.55, 14.28, 22696], ["H-P3-02", 523661.5, 1499783.0, 9, -1.27, 14.29, 16051], ["H-P3-03", 523736.5, 1499732.0, 0, -1.34, 13.35, 32543], ["H-P3-04", 523609.5, 1499766.0, 18, -1.44, 12.33, 5279], ["H-P3-05", 523575.5, 1499759.0, 29, -1.45, 11.26, 774]], "P4": [["H-P4-01", 525035.5, 1501780.0, 6, -0.28, 13.84, 10283], ["H-P4-02", 525009.5, 1501740.0, 20, -0.23, 13.44, 6866], ["H-P4-03", 525042.5, 1501837.0, 12, -0.59, 12.27, 2122], ["H-P4-04", 524992.5, 1501900.0, 22, -0.73, 11.13, 1430], ["H-P4-05", 525065.5, 1501765.0, 19, -0.78, 10.43, 888]]};
+// terrain-derived drainage cells, local metres in the CSF grid of the source plot (P4 uses the 15 Aug grid)
+const CHANNELS = {"P1": [[151.5, 202.5], [147.5, 200.5], [149.5, 200.5], [135.5, 199.5], [137.5, 199.5], [139.5, 199.5], [141.5, 199.5], [143.5, 199.5], [145.5, 199.5], [123.5, 198.5], [125.5, 198.5], [127.5, 198.5], [129.5, 198.5], [131.5, 198.5], [133.5, 198.5], [159.5, 198.5], [110.5, 197.5], [112.5, 197.5], [114.5, 197.5], [116.5, 197.5], [118.5, 197.5], [120.5, 197.5], [122.5, 197.5], [161.5, 197.5], [163.5, 197.5], [165.5, 197.5], [99.5, 196.5], [101.5, 196.5], [103.5, 196.5], [105.5, 196.5], [107.5, 196.5], [109.5, 196.5], [166.5, 196.5], [87.5, 195.5], [89.5, 195.5], [91.5, 195.5], [93.5, 195.5], [95.5, 195.5], [97.5, 195.5], [166.5, 195.5], [76.5, 194.5], [78.5, 194.5], [80.5, 194.5], [82.5, 194.5], [84.5, 194.5], [158.5, 194.5], [168.5, 194.5], [170.5, 194.5], [172.5, 194.5], [181.5, 194.5], [174.5, 193.5], [182.5, 193.5], [175.5, 192.5], [179.5, 192.5], [158.5, 191.5], [177.5, 191.5], [158.5, 190.5], [176.5, 190.5], [184.5, 189.5], [185.5, 187.5], [186.5, 185.5], [185.5, 183.5], [184.5, 181.5], [184.5, 179.5], [184.5, 177.5], [183.5, 176.5], [182.5, 174.5], [182.5, 172.5], [182.5, 170.5], [152.5, 168.5], [154.5, 168.5], [156.5, 168.5], [158.5, 168.5], [182.5, 168.5], [142.5, 167.5], [144.5, 167.5], [146.5, 167.5], [148.5, 167.5], [150.5, 167.5], [160.5, 167.5], [183.5, 167.5], [185.5, 167.5], [187.5, 167.5], [141.5, 166.5], [162.5, 166.5], [164.5, 166.5], [23.5, 165.5], [164.5, 165.5], [189.5, 165.5], [165.5, 164.5], [190.5, 164.5], [23.5, 163.5], [167.5, 163.5], [171.5, 163.5], [173.5, 163.5], [16.5, 162.5], [66.5, 162.5], [168.5, 162.5], [170.5, 162.5], [191.5, 162.5], [22.5, 161.5], [168.5, 161.5], [175.5, 161.5], [16.5, 160.5], [66.5, 160.5], [191.5, 160.5], [21.5, 159.5], [177.5, 159.5], [18.5, 158.5], [64.5, 158.5], [191.5, 158.5], [21.5, 157.5], [179.5, 157.5], [18.5, 156.5], [62.5, 156.5], [181.5, 156.5], [183.5, 156.5], [191.5, 156.5], [20.5, 155.5], [61.5, 155.5], [186.5, 155.5], [188.5, 155.5], [191.5, 155.5], [19.5, 154.5], [60.5, 154.5], [191.5, 154.5], [42.5, 153.5], [191.5, 153.5], [41.5, 152.5], [192.5, 152.5], [40.5, 151.5], [193.5, 151.5], [34.5, 150.5], [36.5, 150.5], [38.5, 150.5], [56.5, 150.5], [18.5, 149.5], [55.5, 149.5], [189.5, 149.5], [191.5, 149.5], [193.5, 149.5], [195.5, 149.5], [34.5, 148.5], [187.5, 148.5], [17.5, 147.5], [53.5, 147.5], [197.5, 147.5], [203.5, 147.5], [35.5, 146.5], [185.5, 146.5], [201.5, 146.5], [36.5, 145.5], [179.5, 145.5], [181.5, 145.5], [183.5, 145.5], [199.5, 145.5], [17.5, 144.5], [50.5, 144.5], [177.5, 144.5], [180.5, 144.5], [182.5, 144.5], [17.5, 143.5], [48.5, 143.5], [164.5, 143.5], [166.5, 143.5], [173.5, 143.5], [175.5, 143.5], [179.5, 143.5], [35.5, 142.5], [162.5, 142.5], [168.5, 142.5], [170.5, 142.5], [172.5, 142.5], [178.5, 142.5], [33.5, 141.5], [46.5, 141.5], [177.5, 141.5], [27.5, 140.5], [45.5, 140.5], [173.5, 140.5], [18.5, 139.5], [28.5, 139.5], [43.5, 139.5], [171.5, 139.5], [174.5, 139.5], [19.5, 138.5], [21.5, 138.5], [23.5, 138.5], [25.5, 138.5], [30.5, 138.5], [170.5, 138.5], [29.5, 137.5], [42.5, 137.5], [171.5, 137.5], [40.5, 136.5], [170.5, 136.5], [40.5, 135.5], [169.5, 135.5], [39.5, 134.5], [168.5, 134.5], [37.5, 133.5], [165.5, 133.5], [32.5, 132.5], [164.5, 132.5], [32.5, 131.5], [162.5, 131.5], [165.5, 131.5], [37.5, 130.5], [164.5, 130.5], [37.5, 129.5], [163.5, 129.5], [37.5, 128.5], [46.5, 128.5], [48.5, 128.5], [161.5, 128.5], [35.5, 127.5], [37.5, 127.5], [39.5, 127.5], [41.5, 127.5], [43.5, 127.5], [45.5, 127.5], [47.5, 127.5], [49.5, 127.5], [189.5, 127.5], [159.5, 126.5], [34.5, 125.5], [191.5, 125.5], [68.5, 124.5], [192.5, 124.5], [67.5, 123.5], [154.5, 123.5], [156.5, 123.5], [203.5, 123.5], [61.5, 122.5], [63.5, 122.5], [65.5, 122.5], [152.5, 122.5], [202.5, 122.5], [60.5, 121.5], [194.5, 121.5], [35.5, 120.5], [151.5, 120.5], [202.5, 120.5], [58.5, 119.5], [195.5, 119.5], [197.5, 119.5], [202.5, 119.5], [57.5, 118.5], [199.5, 118.5], [35.5, 117.5], [71.5, 117.5], [200.5, 117.5], [55.5, 116.5], [62.5, 116.5], [64.5, 116.5], [66.5, 116.5], [68.5, 116.5], [70.5, 116.5], [199.5, 116.5], [44.5, 115.5], [46.5, 115.5], [48.5, 115.5], [50.5, 115.5], [52.5, 115.5], [54.5, 115.5], [149.5, 115.5], [35.5, 114.5], [60.5, 114.5], [197.5, 114.5], [43.5, 113.5], [142.5, 113.5], [144.5, 113.5], [146.5, 113.5], [197.5, 113.5], [43.5, 112.5], [197.5, 112.5], [43.5, 111.5], [197.5, 111.5], [43.5, 110.5], [197.5, 110.5], [43.5, 109.5], [197.5, 109.5], [43.5, 108.5], [197.5, 108.5], [43.5, 107.5], [197.5, 107.5], [43.5, 106.5], [197.5, 106.5], [43.5, 105.5], [197.5, 105.5], [43.5, 104.5], [196.5, 104.5], [43.5, 103.5], [52.5, 103.5], [60.5, 103.5], [193.5, 103.5], [195.5, 103.5], [43.5, 102.5], [58.5, 102.5], [43.5, 101.5], [57.5, 101.5], [43.5, 100.5], [56.5, 100.5], [43.5, 99.5], [51.5, 99.5], [53.5, 99.5], [55.5, 99.5], [43.5, 98.5], [51.5, 98.5], [43.5, 97.5], [51.5, 97.5], [43.5, 96.5], [51.5, 96.5], [43.5, 95.5], [51.5, 95.5], [43.5, 94.5], [51.5, 94.5], [43.5, 93.5], [51.5, 93.5], [43.5, 92.5], [41.5, 91.5], [50.5, 91.5], [43.5, 90.5], [51.5, 90.5], [49.5, 89.5], [48.5, 88.5], [47.5, 87.5], [47.5, 86.5], [46.5, 85.5], [46.5, 84.5], [44.5, 82.5], [43.5, 80.5], [43.5, 78.5], [43.5, 76.5], [51.5, 76.5], [53.5, 76.5], [55.5, 76.5], [43.5, 75.5], [43.5, 74.5], [44.5, 73.5], [44.5, 72.5], [44.5, 71.5], [44.5, 70.5], [193.5, 70.5], [44.5, 69.5], [195.5, 69.5], [197.5, 69.5], [48.5, 68.5], [158.5, 68.5], [199.5, 68.5], [48.5, 67.5], [159.5, 67.5], [44.5, 66.5], [67.5, 66.5], [69.5, 66.5], [71.5, 66.5], [155.5, 66.5], [160.5, 66.5], [202.5, 66.5], [48.5, 65.5], [51.5, 65.5], [61.5, 65.5], [63.5, 65.5], [65.5, 65.5], [153.5, 65.5], [161.5, 65.5], [45.5, 64.5], [49.5, 64.5], [60.5, 64.5], [162.5, 64.5], [46.5, 63.5], [49.5, 63.5], [53.5, 63.5], [55.5, 63.5], [57.5, 63.5], [59.5, 63.5], [163.5, 63.5], [46.5, 62.5], [49.5, 62.5], [54.5, 62.5], [59.5, 62.5], [65.5, 62.5], [67.5, 62.5], [116.5, 62.5], [118.5, 62.5], [120.5, 62.5], [150.5, 62.5], [188.5, 62.5], [190.5, 62.5], [192.5, 62.5], [194.5, 62.5], [46.5, 61.5], [49.5, 61.5], [55.5, 61.5], [62.5, 61.5], [64.5, 61.5], [114.5, 61.5], [146.5, 61.5], [165.5, 61.5], [167.5, 61.5], [185.5, 61.5], [187.5, 61.5], [198.5, 61.5], [200.5, 61.5], [47.5, 60.5], [49.5, 60.5], [56.5, 60.5], [58.5, 60.5], [146.5, 60.5], [168.5, 60.5], [182.5, 60.5], [197.5, 60.5], [47.5, 59.5], [49.5, 59.5], [59.5, 59.5], [61.5, 59.5], [63.5, 59.5], [65.5, 59.5], [67.5, 59.5], [69.5, 59.5], [71.5, 59.5], [73.5, 59.5], [75.5, 59.5], [77.5, 59.5], [79.5, 59.5], [81.5, 59.5], [83.5, 59.5], [85.5, 59.5], [87.5, 59.5], [89.5, 59.5], [91.5, 59.5], [93.5, 59.5], [95.5, 59.5], [97.5, 59.5], [99.5, 59.5], [101.5, 59.5], [103.5, 59.5], [105.5, 59.5], [107.5, 59.5], [109.5, 59.5], [111.5, 59.5], [148.5, 59.5], [173.5, 59.5], [176.5, 59.5], [203.5, 59.5], [48.5, 58.5], [51.5, 58.5], [171.5, 58.5], [177.5, 58.5], [179.5, 58.5], [203.5, 58.5], [48.5, 57.5], [51.5, 57.5], [48.5, 56.5], [50.5, 56.5], [48.5, 55.5], [47.5, 54.5], [47.5, 53.5], [46.5, 51.5], [45.5, 50.5], [179.5, 49.5], [202.5, 49.5], [180.5, 48.5], [203.5, 48.5], [181.5, 47.5], [203.5, 47.5], [181.5, 46.5], [203.5, 46.5], [182.5, 45.5], [202.5, 45.5], [183.5, 44.5], [185.5, 44.5], [187.5, 44.5], [189.5, 44.5], [191.5, 44.5], [203.5, 44.5], [192.5, 43.5], [194.5, 43.5], [202.5, 43.5], [202.5, 42.5], [202.5, 41.5], [202.5, 40.5], [202.5, 39.5], [201.5, 38.5], [201.5, 37.5], [66.5, 36.5], [48.5, 35.5], [201.5, 35.5], [52.5, 34.5], [61.5, 34.5], [63.5, 34.5], [198.5, 34.5], [200.5, 34.5], [50.5, 33.5], [54.5, 33.5], [56.5, 33.5], [60.5, 33.5], [194.5, 33.5], [196.5, 33.5], [51.5, 32.5], [59.5, 32.5], [51.5, 30.5], [51.5, 28.5], [51.5, 26.5], [57.5, 25.5], [57.5, 24.5], [57.5, 23.5], [51.5, 22.5], [51.5, 21.5], [70.5, 21.5], [197.5, 21.5], [199.5, 21.5], [201.5, 21.5], [203.5, 21.5], [57.5, 20.5], [203.5, 20.5], [57.5, 19.5], [59.5, 19.5], [61.5, 19.5], [63.5, 19.5], [65.5, 19.5], [67.5, 19.5], [203.5, 19.5], [56.5, 18.5], [55.5, 17.5], [198.5, 17.5], [200.5, 17.5], [202.5, 17.5], [56.5, 16.5], [55.5, 15.5], [54.5, 14.5], [56.5, 14.5], [195.5, 14.5], [54.5, 13.5], [176.5, 13.5], [178.5, 13.5], [194.5, 13.5], [174.5, 12.5], [180.5, 12.5], [50.5, 11.5], [172.5, 11.5], [181.5, 11.5], [183.5, 11.5], [185.5, 11.5], [187.5, 11.5], [189.5, 11.5], [191.5, 11.5], [193.5, 11.5], [50.5, 10.5], [50.5, 9.5], [51.5, 7.5], [52.5, 5.5], [53.5, 3.5], [54.5, 1.5], [68.5, 1.5], [70.5, 1.5], [72.5, 1.5], [74.5, 1.5], [76.5, 1.5], [78.5, 1.5], [80.5, 1.5]], "P2": [[197.5, 190.0], [11.5, 188.0], [11.5, 187.0], [11.5, 186.0], [11.5, 185.0], [11.5, 184.0], [201.5, 184.0], [201.5, 183.0], [201.5, 182.0], [201.5, 181.0], [201.5, 180.0], [201.5, 179.0], [201.5, 178.0], [12.5, 177.0], [201.5, 177.0], [15.5, 176.0], [17.5, 176.0], [201.5, 176.0], [200.5, 175.0], [49.5, 174.0], [19.5, 173.0], [200.5, 173.0], [49.5, 172.0], [21.5, 171.0], [201.5, 171.0], [49.5, 170.0], [23.5, 169.0], [201.5, 169.0], [48.5, 168.0], [201.5, 168.0], [25.5, 167.0], [27.5, 167.0], [29.5, 167.0], [46.5, 167.0], [92.5, 167.0], [26.5, 166.0], [28.5, 166.0], [30.5, 166.0], [32.5, 166.0], [34.5, 166.0], [44.5, 166.0], [93.5, 166.0], [36.5, 165.0], [93.5, 165.0], [37.5, 164.0], [94.5, 164.0], [38.5, 163.0], [94.5, 163.0], [42.5, 162.0], [40.5, 161.0], [94.5, 161.0], [42.5, 160.0], [42.5, 159.0], [43.5, 158.0], [44.5, 157.0], [45.5, 156.0], [46.5, 155.0], [47.5, 154.0], [48.5, 153.0], [49.5, 152.0], [50.5, 151.0], [94.5, 151.0], [53.5, 150.0], [55.5, 150.0], [160.5, 150.0], [94.5, 149.0], [57.5, 148.0], [162.5, 148.0], [94.5, 147.0], [33.5, 146.0], [35.5, 146.0], [37.5, 146.0], [93.5, 146.0], [29.5, 145.0], [32.5, 145.0], [58.5, 145.0], [93.5, 145.0], [30.5, 144.0], [56.5, 144.0], [83.5, 144.0], [166.5, 144.0], [41.5, 143.0], [46.5, 143.0], [48.5, 143.0], [50.5, 143.0], [54.5, 143.0], [56.5, 143.0], [84.5, 143.0], [92.5, 143.0], [167.5, 143.0], [43.5, 142.0], [51.5, 142.0], [56.5, 142.0], [58.5, 142.0], [79.5, 142.0], [81.5, 142.0], [83.5, 142.0], [85.5, 142.0], [87.5, 142.0], [90.5, 142.0], [104.5, 142.0], [55.5, 141.0], [59.5, 141.0], [73.5, 141.0], [75.5, 141.0], [77.5, 141.0], [94.5, 141.0], [169.5, 141.0], [54.5, 140.0], [61.5, 140.0], [66.5, 140.0], [69.5, 140.0], [71.5, 140.0], [95.5, 140.0], [170.5, 140.0], [53.5, 139.0], [64.5, 139.0], [70.5, 139.0], [96.5, 139.0], [171.5, 139.0], [69.5, 138.0], [106.5, 138.0], [202.5, 138.0], [98.5, 137.0], [100.5, 137.0], [173.5, 137.0], [67.5, 136.0], [102.5, 136.0], [108.5, 136.0], [202.5, 136.0], [101.5, 135.0], [105.5, 135.0], [116.5, 135.0], [202.5, 135.0], [100.5, 134.0], [110.5, 134.0], [174.5, 134.0], [196.5, 134.0], [99.5, 133.0], [108.5, 133.0], [114.5, 133.0], [196.5, 133.0], [109.5, 132.0], [115.5, 132.0], [197.5, 132.0], [110.5, 131.0], [113.5, 131.0], [115.5, 131.0], [197.5, 131.0], [111.5, 130.0], [179.5, 130.0], [202.5, 130.0], [180.5, 129.0], [202.5, 129.0], [181.5, 128.0], [199.5, 128.0], [116.5, 127.0], [190.5, 127.0], [202.5, 127.0], [182.5, 126.0], [200.5, 126.0], [117.5, 125.0], [192.5, 125.0], [201.5, 125.0], [119.5, 124.0], [121.5, 124.0], [183.5, 124.0], [200.5, 124.0], [122.5, 123.0], [152.5, 123.0], [183.5, 123.0], [200.5, 123.0], [124.5, 122.0], [153.5, 122.0], [155.5, 122.0], [164.5, 122.0], [183.5, 122.0], [200.5, 122.0], [125.5, 121.0], [134.5, 121.0], [166.5, 121.0], [196.5, 121.0], [201.5, 121.0], [127.5, 120.0], [130.5, 120.0], [132.5, 120.0], [135.5, 120.0], [158.5, 120.0], [183.5, 120.0], [200.5, 120.0], [159.5, 119.0], [168.5, 119.0], [198.5, 119.0], [136.5, 118.0], [161.5, 118.0], [168.5, 118.0], [199.5, 118.0], [136.5, 117.0], [164.5, 117.0], [166.5, 117.0], [168.5, 117.0], [182.5, 117.0], [200.5, 117.0], [165.5, 116.0], [171.5, 116.0], [183.5, 116.0], [185.5, 116.0], [194.5, 116.0], [196.5, 116.0], [199.5, 116.0], [165.5, 115.0], [173.5, 115.0], [175.5, 115.0], [177.5, 115.0], [179.5, 115.0], [181.5, 115.0], [183.5, 115.0], [185.5, 115.0], [187.5, 115.0], [189.5, 115.0], [191.5, 115.0], [193.5, 115.0], [199.5, 115.0], [165.5, 114.0], [190.5, 114.0], [199.5, 114.0], [166.5, 113.0], [183.5, 113.0], [185.5, 113.0], [187.5, 113.0], [198.5, 113.0], [138.5, 112.0], [179.5, 112.0], [181.5, 112.0], [199.5, 112.0], [167.5, 111.0], [198.5, 111.0], [140.5, 110.0], [178.5, 110.0], [199.5, 110.0], [168.5, 109.0], [177.5, 109.0], [62.5, 108.0], [167.5, 108.0], [177.5, 108.0], [63.5, 107.0], [143.5, 107.0], [166.5, 107.0], [177.5, 107.0], [64.5, 106.0], [165.5, 106.0], [177.5, 106.0], [203.5, 106.0], [145.5, 105.0], [164.5, 105.0], [177.5, 105.0], [203.5, 105.0], [145.5, 104.0], [147.5, 104.0], [149.5, 104.0], [151.5, 104.0], [153.5, 104.0], [155.5, 104.0], [157.5, 104.0], [159.5, 104.0], [161.5, 104.0], [168.5, 104.0], [202.5, 104.0], [140.5, 103.0], [142.5, 103.0], [144.5, 103.0], [176.5, 103.0], [67.5, 102.0], [69.5, 102.0], [137.5, 102.0], [139.5, 102.0], [176.5, 102.0], [71.5, 101.0], [135.5, 101.0], [164.5, 101.0], [174.5, 101.0], [203.5, 101.0], [131.5, 100.0], [133.5, 100.0], [163.5, 100.0], [173.5, 100.0], [74.5, 99.0], [152.5, 99.0], [154.5, 99.0], [156.5, 99.0], [158.5, 99.0], [160.5, 99.0], [162.5, 99.0], [203.5, 99.0], [129.5, 98.0], [173.5, 98.0], [76.5, 97.0], [78.5, 97.0], [122.5, 97.0], [124.5, 97.0], [126.5, 97.0], [128.5, 97.0], [150.5, 97.0], [203.5, 97.0], [112.5, 96.0], [114.5, 96.0], [117.5, 96.0], [119.5, 96.0], [121.5, 96.0], [144.5, 96.0], [146.5, 96.0], [173.5, 96.0], [80.5, 95.0], [130.5, 95.0], [143.5, 95.0], [148.5, 95.0], [203.5, 95.0], [110.5, 94.0], [141.5, 94.0], [203.5, 94.0], [109.5, 93.0], [140.5, 93.0], [203.5, 93.0], [107.5, 92.0], [109.5, 92.0], [139.5, 92.0], [203.5, 92.0], [107.5, 91.0], [130.5, 91.0], [173.5, 91.0], [85.5, 90.0], [87.5, 90.0], [104.5, 90.0], [106.5, 90.0], [130.5, 90.0], [173.5, 90.0], [84.5, 89.0], [102.5, 89.0], [109.5, 89.0], [130.5, 89.0], [173.5, 89.0], [85.5, 88.0], [90.5, 88.0], [111.5, 88.0], [173.5, 88.0], [87.5, 87.0], [91.5, 87.0], [99.5, 87.0], [112.5, 87.0], [173.5, 87.0], [89.5, 86.0], [97.5, 86.0], [136.5, 86.0], [203.5, 86.0], [90.5, 85.0], [93.5, 85.0], [114.5, 85.0], [173.5, 85.0], [39.5, 84.0], [93.5, 84.0], [95.5, 84.0], [97.5, 84.0], [136.5, 84.0], [203.5, 84.0], [94.5, 83.0], [97.5, 83.0], [136.5, 83.0], [203.5, 83.0], [97.5, 82.0], [173.5, 82.0], [40.5, 81.0], [136.5, 81.0], [203.5, 81.0], [97.5, 80.0], [173.5, 80.0], [42.5, 79.0], [136.5, 79.0], [203.5, 79.0], [98.5, 78.0], [172.5, 78.0], [44.5, 77.0], [136.5, 77.0], [203.5, 77.0], [98.5, 76.0], [172.5, 76.0], [46.5, 75.0], [136.5, 75.0], [203.5, 75.0], [48.5, 74.0], [136.5, 74.0], [203.5, 74.0], [70.5, 73.0], [72.5, 73.0], [97.5, 73.0], [172.5, 73.0], [49.5, 72.0], [69.5, 72.0], [75.5, 72.0], [77.5, 72.0], [79.5, 72.0], [81.5, 72.0], [83.5, 72.0], [95.5, 72.0], [136.5, 72.0], [203.5, 72.0], [52.5, 71.0], [54.5, 71.0], [56.5, 71.0], [58.5, 71.0], [85.5, 71.0], [92.5, 71.0], [94.5, 71.0], [203.5, 71.0], [60.5, 70.0], [62.5, 70.0], [64.5, 70.0], [66.5, 70.0], [87.5, 70.0], [89.5, 70.0], [91.5, 70.0], [203.5, 70.0], [172.5, 69.0], [31.5, 68.0], [172.5, 68.0], [32.5, 67.0], [203.5, 67.0], [87.5, 66.0], [34.5, 65.0], [36.5, 65.0], [203.5, 65.0], [86.5, 64.0], [38.5, 63.0], [203.5, 63.0], [84.5, 62.0], [40.5, 61.0], [84.5, 61.0], [41.5, 60.0], [79.5, 60.0], [81.5, 60.0], [83.5, 60.0], [42.5, 59.0], [67.5, 59.0], [69.5, 59.0], [71.5, 59.0], [73.5, 59.0], [75.5, 59.0], [77.5, 59.0], [202.5, 59.0], [65.5, 58.0], [202.5, 58.0], [64.5, 57.0], [202.5, 57.0], [63.5, 56.0], [201.5, 56.0], [62.5, 55.0], [200.5, 55.0], [61.5, 54.0], [199.5, 54.0], [60.5, 53.0], [80.5, 53.0], [45.5, 52.0], [79.5, 52.0], [197.5, 52.0], [46.5, 51.0], [48.5, 51.0], [50.5, 51.0], [52.5, 51.0], [58.5, 51.0], [80.5, 51.0], [45.5, 50.0], [55.5, 50.0], [57.5, 50.0], [78.5, 50.0], [195.5, 50.0], [59.5, 49.0], [80.5, 49.0], [44.5, 48.0], [80.5, 48.0], [60.5, 47.0], [42.5, 46.0], [80.5, 46.0], [61.5, 45.0], [40.5, 44.0], [39.5, 43.0], [38.5, 42.0], [37.5, 41.0], [35.5, 40.0], [82.5, 40.0], [83.5, 39.0], [84.5, 38.0], [84.5, 37.0], [31.5, 36.0], [29.5, 35.0], [28.5, 34.0], [28.5, 32.0], [26.5, 30.0], [24.5, 29.0], [22.5, 28.0], [21.5, 26.0], [19.5, 24.0], [18.5, 22.0], [145.5, 2.0], [147.5, 2.0], [149.5, 2.0], [151.5, 2.0], [153.5, 2.0], [155.5, 2.0], [157.5, 2.0], [159.5, 2.0], [161.5, 2.0], [163.5, 2.0], [165.5, 2.0], [167.5, 2.0], [169.5, 2.0], [171.5, 2.0], [173.5, 2.0], [175.5, 2.0], [195.5, 2.0], [197.5, 2.0], [199.5, 2.0], [201.5, 2.0]], "P3": [[104.5, 194.0], [103.5, 193.0], [99.5, 192.0], [101.5, 192.0], [97.5, 190.0], [96.5, 188.0], [96.5, 186.0], [97.5, 185.0], [97.5, 184.0], [97.5, 183.0], [96.5, 182.0], [95.5, 181.0], [93.5, 180.0], [32.5, 179.0], [33.5, 178.0], [194.5, 178.0], [93.5, 177.0], [35.5, 176.0], [37.5, 176.0], [93.5, 176.0], [39.5, 175.0], [46.5, 175.0], [196.5, 175.0], [46.5, 174.0], [196.5, 174.0], [47.5, 173.0], [197.5, 173.0], [42.5, 172.0], [94.5, 172.0], [42.5, 171.0], [94.5, 171.0], [201.5, 171.0], [43.5, 170.0], [50.5, 170.0], [93.5, 170.0], [51.5, 169.0], [45.5, 168.0], [92.5, 168.0], [51.5, 167.0], [46.5, 166.0], [52.5, 166.0], [94.5, 166.0], [96.5, 166.0], [48.5, 165.0], [53.5, 165.0], [83.5, 165.0], [96.5, 165.0], [54.5, 164.0], [97.5, 164.0], [85.5, 163.0], [55.5, 162.0], [96.5, 162.0], [86.5, 161.0], [57.5, 160.0], [59.5, 160.0], [95.5, 160.0], [88.5, 159.0], [167.5, 159.0], [60.5, 158.0], [94.5, 158.0], [168.5, 158.0], [61.5, 157.0], [94.5, 157.0], [168.5, 157.0], [61.5, 156.0], [94.5, 156.0], [168.5, 156.0], [61.5, 155.0], [89.5, 155.0], [101.5, 155.0], [192.5, 155.0], [89.5, 154.0], [101.5, 154.0], [192.5, 154.0], [89.5, 153.0], [101.5, 153.0], [166.5, 153.0], [192.5, 153.0], [89.5, 152.0], [101.5, 152.0], [167.5, 152.0], [63.5, 151.0], [94.5, 151.0], [144.5, 151.0], [189.5, 151.0], [89.5, 150.0], [100.5, 150.0], [166.5, 150.0], [62.5, 149.0], [95.5, 149.0], [144.5, 149.0], [187.5, 149.0], [91.5, 148.0], [100.5, 148.0], [168.5, 148.0], [61.5, 147.0], [95.5, 147.0], [146.5, 147.0], [187.5, 147.0], [61.5, 146.0], [95.5, 146.0], [147.5, 146.0], [171.5, 146.0], [40.5, 145.0], [93.5, 145.0], [96.5, 145.0], [98.5, 145.0], [172.5, 145.0], [40.5, 144.0], [93.5, 144.0], [148.5, 144.0], [187.5, 144.0], [62.5, 143.0], [94.5, 143.0], [174.5, 143.0], [39.5, 142.0], [93.5, 142.0], [174.5, 142.0], [39.5, 141.0], [91.5, 141.0], [150.5, 141.0], [189.5, 141.0], [63.5, 140.0], [90.5, 140.0], [173.5, 140.0], [39.5, 139.0], [88.5, 139.0], [174.5, 139.0], [40.5, 138.0], [81.5, 138.0], [85.5, 138.0], [87.5, 138.0], [151.5, 138.0], [191.5, 138.0], [66.5, 137.0], [70.5, 137.0], [80.5, 137.0], [84.5, 137.0], [88.5, 137.0], [173.5, 137.0], [40.5, 136.0], [68.5, 136.0], [73.5, 136.0], [79.5, 136.0], [151.5, 136.0], [191.5, 136.0], [75.5, 135.0], [89.5, 135.0], [172.5, 135.0], [39.5, 134.0], [77.5, 134.0], [151.5, 134.0], [191.5, 134.0], [91.5, 133.0], [173.5, 133.0], [38.5, 132.0], [151.5, 132.0], [191.5, 132.0], [93.5, 131.0], [173.5, 131.0], [38.5, 130.0], [95.5, 130.0], [97.5, 130.0], [150.5, 130.0], [191.5, 130.0], [98.5, 129.0], [150.5, 129.0], [191.5, 129.0], [99.5, 128.0], [150.5, 128.0], [191.5, 128.0], [100.5, 127.0], [149.5, 127.0], [192.5, 127.0], [194.5, 127.0], [100.5, 126.0], [149.5, 126.0], [195.5, 126.0], [101.5, 125.0], [122.5, 125.0], [174.5, 125.0], [41.5, 124.0], [103.5, 124.0], [106.5, 124.0], [122.5, 124.0], [175.5, 124.0], [42.5, 123.0], [102.5, 123.0], [108.5, 123.0], [110.5, 123.0], [149.5, 123.0], [197.5, 123.0], [45.5, 122.0], [111.5, 122.0], [113.5, 122.0], [115.5, 122.0], [149.5, 122.0], [197.5, 122.0], [94.5, 121.0], [96.5, 121.0], [98.5, 121.0], [100.5, 121.0], [120.5, 121.0], [175.5, 121.0], [47.5, 120.0], [117.5, 120.0], [150.5, 120.0], [197.5, 120.0], [92.5, 119.0], [120.5, 119.0], [175.5, 119.0], [47.5, 118.0], [119.5, 118.0], [149.5, 118.0], [196.5, 118.0], [81.5, 117.0], [90.5, 117.0], [148.5, 117.0], [196.5, 117.0], [80.5, 116.0], [90.5, 116.0], [122.5, 116.0], [147.5, 116.0], [195.5, 116.0], [79.5, 115.0], [89.5, 115.0], [140.5, 115.0], [175.5, 115.0], [48.5, 114.0], [84.5, 114.0], [88.5, 114.0], [141.5, 114.0], [149.5, 114.0], [193.5, 114.0], [46.5, 113.0], [77.5, 113.0], [86.5, 113.0], [126.5, 113.0], [150.5, 113.0], [177.5, 113.0], [22.5, 112.0], [48.5, 112.0], [76.5, 112.0], [127.5, 112.0], [129.5, 112.0], [131.5, 112.0], [133.5, 112.0], [141.5, 112.0], [175.5, 112.0], [193.5, 112.0], [46.5, 111.0], [74.5, 111.0], [135.5, 111.0], [149.5, 111.0], [177.5, 111.0], [193.5, 111.0], [46.5, 110.0], [72.5, 110.0], [84.5, 110.0], [141.5, 110.0], [174.5, 110.0], [193.5, 110.0], [46.5, 109.0], [68.5, 109.0], [70.5, 109.0], [83.5, 109.0], [138.5, 109.0], [140.5, 109.0], [142.5, 109.0], [173.5, 109.0], [192.5, 109.0], [46.5, 108.0], [48.5, 108.0], [50.5, 108.0], [52.5, 108.0], [64.5, 108.0], [66.5, 108.0], [82.5, 108.0], [150.5, 108.0], [181.5, 108.0], [23.5, 107.0], [45.5, 107.0], [55.5, 107.0], [63.5, 107.0], [143.5, 107.0], [174.5, 107.0], [191.5, 107.0], [37.5, 106.0], [39.5, 106.0], [42.5, 106.0], [44.5, 106.0], [57.5, 106.0], [59.5, 106.0], [61.5, 106.0], [144.5, 106.0], [174.5, 106.0], [191.5, 106.0], [26.5, 105.0], [28.5, 105.0], [34.5, 105.0], [36.5, 105.0], [82.5, 105.0], [146.5, 105.0], [152.5, 105.0], [182.5, 105.0], [24.5, 104.0], [26.5, 104.0], [28.5, 104.0], [30.5, 104.0], [33.5, 104.0], [82.5, 104.0], [146.5, 104.0], [148.5, 104.0], [150.5, 104.0], [152.5, 104.0], [182.5, 104.0], [23.5, 103.0], [56.5, 103.0], [140.5, 103.0], [142.5, 103.0], [144.5, 103.0], [175.5, 103.0], [184.5, 103.0], [22.5, 102.0], [56.5, 102.0], [136.5, 102.0], [138.5, 102.0], [153.5, 102.0], [184.5, 102.0], [21.5, 101.0], [57.5, 101.0], [135.5, 101.0], [174.5, 101.0], [191.5, 101.0], [30.5, 100.0], [78.5, 100.0], [153.5, 100.0], [173.5, 100.0], [192.5, 100.0], [19.5, 99.0], [56.5, 99.0], [133.5, 99.0], [173.5, 99.0], [192.5, 99.0], [31.5, 98.0], [77.5, 98.0], [111.5, 98.0], [113.5, 98.0], [153.5, 98.0], [186.5, 98.0], [16.5, 97.0], [57.5, 97.0], [109.5, 97.0], [115.5, 97.0], [129.5, 97.0], [131.5, 97.0], [173.5, 97.0], [186.5, 97.0], [15.5, 96.0], [57.5, 96.0], [108.5, 96.0], [118.5, 96.0], [154.5, 96.0], [186.5, 96.0], [14.5, 95.0], [57.5, 95.0], [107.5, 95.0], [120.5, 95.0], [122.5, 95.0], [154.5, 95.0], [186.5, 95.0], [34.5, 94.0], [76.5, 94.0], [123.5, 94.0], [154.5, 94.0], [173.5, 94.0], [186.5, 94.0], [34.5, 93.0], [76.5, 93.0], [124.5, 93.0], [155.5, 93.0], [172.5, 93.0], [192.5, 93.0], [56.5, 92.0], [104.5, 92.0], [169.5, 92.0], [191.5, 92.0], [56.5, 91.0], [75.5, 91.0], [157.5, 91.0], [185.5, 91.0], [34.5, 90.0], [73.5, 90.0], [102.5, 90.0], [169.5, 90.0], [191.5, 90.0], [32.5, 89.0], [34.5, 89.0], [36.5, 89.0], [38.5, 89.0], [40.5, 89.0], [54.5, 89.0], [99.5, 89.0], [102.5, 89.0], [170.5, 89.0], [185.5, 89.0], [24.5, 88.0], [26.5, 88.0], [28.5, 88.0], [30.5, 88.0], [53.5, 88.0], [102.5, 88.0], [172.5, 88.0], [191.5, 88.0], [52.5, 87.0], [103.5, 87.0], [173.5, 87.0], [191.5, 87.0], [51.5, 86.0], [103.5, 86.0], [174.5, 86.0], [192.5, 86.0], [51.5, 85.0], [103.5, 85.0], [175.5, 85.0], [193.5, 85.0], [42.5, 84.0], [94.5, 84.0], [164.5, 84.0], [188.5, 84.0], [42.5, 83.0], [103.5, 83.0], [166.5, 83.0], [168.5, 83.0], [189.5, 83.0], [43.5, 82.0], [102.5, 82.0], [170.5, 82.0], [189.5, 82.0], [44.5, 81.0], [102.5, 81.0], [177.5, 81.0], [194.5, 81.0], [49.5, 80.0], [171.5, 80.0], [189.5, 80.0], [44.5, 79.0], [100.5, 79.0], [178.5, 79.0], [195.5, 79.0], [50.5, 78.0], [134.5, 78.0], [179.5, 78.0], [194.5, 78.0], [51.5, 77.0], [131.5, 77.0], [133.5, 77.0], [136.5, 77.0], [138.5, 77.0], [140.5, 77.0], [170.5, 77.0], [189.5, 77.0], [43.5, 76.0], [98.5, 76.0], [130.5, 76.0], [170.5, 76.0], [178.5, 76.0], [190.5, 76.0], [42.5, 75.0], [97.5, 75.0], [127.5, 75.0], [142.5, 75.0], [168.5, 75.0], [170.5, 75.0], [175.5, 75.0], [179.5, 75.0], [194.5, 75.0], [49.5, 74.0], [121.5, 74.0], [142.5, 74.0], [145.5, 74.0], [171.5, 74.0], [173.5, 74.0], [180.5, 74.0], [194.5, 74.0], [95.5, 73.0], [120.5, 73.0], [123.5, 73.0], [142.5, 73.0], [166.5, 73.0], [182.5, 73.0], [194.5, 73.0], [49.5, 72.0], [116.5, 72.0], [141.5, 72.0], [165.5, 72.0], [191.5, 72.0], [196.5, 72.0], [94.5, 71.0], [118.5, 71.0], [140.5, 71.0], [151.5, 71.0], [153.5, 71.0], [155.5, 71.0], [164.5, 71.0], [190.5, 71.0], [50.5, 70.0], [137.5, 70.0], [139.5, 70.0], [150.5, 70.0], [157.5, 70.0], [162.5, 70.0], [189.5, 70.0], [198.5, 70.0], [92.5, 69.0], [136.5, 69.0], [157.5, 69.0], [160.5, 69.0], [183.5, 69.0], [185.5, 69.0], [187.5, 69.0], [199.5, 69.0], [201.5, 69.0], [50.5, 68.0], [135.5, 68.0], [157.5, 68.0], [50.5, 67.0], [134.5, 67.0], [156.5, 67.0], [50.5, 66.0], [134.5, 66.0], [156.5, 66.0], [50.5, 65.0], [135.5, 65.0], [155.5, 65.0], [50.5, 64.0], [135.5, 64.0], [148.5, 64.0], [154.5, 64.0], [2.5, 63.0], [87.5, 63.0], [146.5, 63.0], [183.5, 63.0], [185.5, 63.0], [201.5, 63.0], [50.5, 62.0], [134.5, 62.0], [182.5, 62.0], [188.5, 62.0], [190.5, 62.0], [194.5, 62.0], [2.5, 61.0], [86.5, 61.0], [146.5, 61.0], [179.5, 61.0], [181.5, 61.0], [192.5, 61.0], [196.5, 61.0], [2.5, 60.0], [85.5, 60.0], [146.5, 60.0], [197.5, 60.0], [2.5, 59.0], [84.5, 59.0], [146.5, 59.0], [198.5, 59.0], [49.5, 58.0], [134.5, 58.0], [175.5, 58.0], [2.5, 57.0], [83.5, 57.0], [146.5, 57.0], [197.5, 57.0], [83.5, 56.0], [145.5, 56.0], [198.5, 56.0], [83.5, 55.0], [130.5, 55.0], [144.5, 55.0], [198.5, 55.0], [83.5, 54.0], [128.5, 54.0], [173.5, 54.0], [2.5, 53.0], [124.5, 53.0], [126.5, 53.0], [173.5, 53.0], [81.5, 52.0], [124.5, 52.0], [142.5, 52.0], [2.5, 51.0], [122.5, 51.0], [125.5, 51.0], [173.5, 51.0], [79.5, 50.0], [121.5, 50.0], [124.5, 50.0], [173.5, 50.0], [78.5, 49.0], [123.5, 49.0], [141.5, 49.0], [2.5, 48.0], [118.5, 48.0], [125.5, 48.0], [2.5, 47.0], [77.5, 47.0], [117.5, 47.0], [126.5, 47.0], [2.5, 46.0], [72.5, 46.0], [74.5, 46.0], [115.5, 46.0], [173.5, 46.0], [114.5, 45.0], [173.5, 45.0], [113.5, 44.0], [173.5, 44.0], [111.5, 43.0], [123.5, 43.0], [67.5, 42.0], [110.5, 42.0], [173.5, 42.0], [108.5, 41.0], [65.5, 40.0], [173.5, 40.0], [106.5, 39.0], [63.5, 38.0], [172.5, 38.0], [104.5, 37.0], [171.5, 37.0], [101.5, 36.0], [103.5, 36.0], [103.5, 35.0], [102.5, 34.0], [101.5, 33.0], [101.5, 32.0], [101.5, 31.0], [93.5, 29.0], [90.5, 28.0], [92.5, 28.0], [88.5, 26.0], [87.5, 24.0], [85.5, 22.0], [80.5, 20.0], [82.5, 20.0], [79.5, 19.0], [78.5, 18.0], [76.5, 17.0], [82.5, 17.0], [81.5, 16.0], [76.5, 15.0], [78.5, 15.0], [80.5, 15.0], [75.5, 14.0], [73.5, 12.0], [72.5, 10.0], [71.5, 8.0]], "P4_E1": [[40.5, 307.0], [42.5, 307.0], [38.5, 305.0], [36.5, 303.0], [34.5, 301.0], [33.5, 299.0], [33.5, 297.0], [33.5, 295.0], [31.5, 293.0], [32.5, 291.0], [32.5, 289.0], [33.5, 287.0], [33.5, 285.0], [34.5, 283.0], [34.5, 281.0], [35.5, 279.0], [36.5, 277.0], [36.5, 275.0], [36.5, 274.0], [67.5, 274.0], [70.5, 274.0], [72.5, 274.0], [37.5, 273.0], [37.5, 272.0], [37.5, 271.0], [38.5, 270.0], [38.5, 269.0], [38.5, 267.0], [39.5, 265.0], [40.5, 263.0], [23.5, 262.0], [20.5, 261.0], [24.5, 261.0], [25.5, 260.0], [26.5, 259.0], [27.5, 258.0], [42.5, 258.0], [30.5, 257.0], [32.5, 257.0], [42.5, 257.0], [42.5, 256.0], [36.5, 255.0], [37.5, 254.0], [39.5, 254.0], [29.5, 247.0], [28.5, 246.0], [38.5, 246.0], [30.5, 245.0], [36.5, 245.0], [39.5, 245.0], [41.5, 245.0], [43.5, 245.0], [32.5, 244.0], [34.5, 244.0], [44.5, 244.0], [46.5, 244.0], [47.5, 243.0], [48.5, 242.0], [26.5, 241.0], [26.5, 240.0], [50.5, 239.0], [51.5, 237.0], [53.5, 235.0], [54.5, 234.0], [56.5, 234.0], [58.5, 234.0], [60.5, 233.0], [60.5, 231.0], [112.5, 230.0], [113.5, 229.0], [112.5, 228.0], [111.5, 227.0], [109.5, 226.0], [60.5, 225.0], [60.5, 224.0], [108.5, 224.0], [106.5, 223.0], [62.5, 222.0], [108.5, 222.0], [85.5, 221.0], [87.5, 221.0], [89.5, 221.0], [91.5, 221.0], [93.5, 221.0], [95.5, 221.0], [97.5, 221.0], [99.5, 221.0], [101.5, 221.0], [103.5, 221.0], [108.5, 221.0], [65.5, 220.0], [67.5, 220.0], [69.5, 220.0], [71.5, 220.0], [73.5, 220.0], [75.5, 220.0], [77.5, 220.0], [103.5, 220.0], [78.5, 219.0], [83.5, 219.0], [110.5, 219.0], [80.5, 218.0], [101.5, 218.0], [100.5, 217.0], [99.5, 216.0], [98.5, 215.0], [96.5, 213.0], [96.5, 212.0], [96.5, 211.0], [94.5, 210.0], [92.5, 209.0], [96.5, 209.0], [94.5, 208.0], [90.5, 207.0], [96.5, 207.0], [94.5, 206.0], [90.5, 205.0], [96.5, 205.0], [94.5, 204.0], [88.5, 203.0], [96.5, 203.0], [94.5, 202.0], [65.5, 201.0], [67.5, 201.0], [94.5, 201.0], [64.5, 200.0], [86.5, 200.0], [97.5, 200.0], [49.5, 199.0], [69.5, 199.0], [85.5, 199.0], [97.5, 199.0], [49.5, 198.0], [71.5, 198.0], [85.5, 198.0], [97.5, 198.0], [50.5, 197.0], [52.5, 197.0], [55.5, 197.0], [57.5, 197.0], [59.5, 197.0], [61.5, 197.0], [83.5, 197.0], [94.5, 197.0], [100.5, 197.0], [73.5, 196.0], [85.5, 196.0], [97.5, 196.0], [74.5, 195.0], [76.5, 195.0], [78.5, 195.0], [80.5, 195.0], [85.5, 195.0], [97.5, 195.0], [85.5, 194.0], [97.5, 194.0], [94.5, 193.0], [85.5, 192.0], [97.5, 192.0], [94.5, 191.0], [85.5, 190.0], [97.5, 190.0], [94.5, 189.0], [85.5, 188.0], [97.5, 188.0], [94.5, 187.0], [8.5, 186.0], [94.5, 186.0], [9.5, 185.0], [94.5, 185.0], [10.5, 184.0], [94.5, 184.0], [11.5, 183.0], [85.5, 183.0], [97.5, 183.0], [94.5, 182.0], [85.5, 181.0], [97.5, 181.0], [94.5, 180.0], [85.5, 179.0], [97.5, 179.0], [94.5, 178.0], [85.5, 177.0], [97.5, 177.0], [94.5, 176.0], [85.5, 175.0], [97.5, 175.0], [94.5, 174.0], [85.5, 173.0], [97.5, 173.0], [94.5, 172.0], [85.5, 171.0], [97.5, 171.0], [94.5, 170.0], [83.5, 169.0], [97.5, 169.0], [94.5, 168.0], [81.5, 167.0], [97.5, 167.0], [46.5, 166.0], [51.5, 166.0], [53.5, 166.0], [55.5, 166.0], [57.5, 166.0], [59.5, 166.0], [61.5, 166.0], [63.5, 166.0], [65.5, 166.0], [67.5, 166.0], [80.5, 166.0], [97.5, 166.0], [48.5, 165.0], [69.5, 165.0], [71.5, 165.0], [73.5, 165.0], [75.5, 165.0], [77.5, 165.0], [79.5, 165.0], [97.5, 165.0], [94.5, 164.0], [77.5, 163.0], [97.5, 163.0], [94.5, 162.0], [75.5, 161.0], [97.5, 161.0], [94.5, 160.0], [73.5, 159.0], [97.5, 159.0], [94.5, 158.0], [71.5, 157.0], [97.5, 157.0], [94.5, 156.0], [71.5, 155.0], [97.5, 155.0], [94.5, 154.0], [69.5, 153.0], [97.5, 153.0], [94.5, 152.0], [69.5, 151.0], [97.5, 151.0], [52.5, 150.0], [69.5, 150.0], [94.5, 150.0], [100.5, 150.0], [51.5, 149.0], [69.5, 149.0], [92.5, 149.0], [102.5, 149.0], [54.5, 148.0], [89.5, 148.0], [103.5, 148.0], [105.5, 148.0], [107.5, 148.0], [49.5, 147.0], [68.5, 147.0], [108.5, 147.0], [110.5, 147.0], [47.5, 146.0], [68.5, 146.0], [112.5, 146.0], [46.5, 145.0], [68.5, 145.0], [113.5, 145.0], [58.5, 144.0], [88.5, 144.0], [46.5, 143.0], [60.5, 143.0], [62.5, 143.0], [69.5, 143.0], [112.5, 143.0], [64.5, 142.0], [69.5, 142.0], [112.5, 142.0], [66.5, 141.0], [68.5, 141.0], [112.5, 141.0], [64.5, 140.0], [66.5, 140.0], [89.5, 140.0], [45.5, 139.0], [62.5, 139.0], [88.5, 139.0], [42.5, 138.0], [58.5, 138.0], [60.5, 138.0], [113.5, 138.0], [43.5, 137.0], [57.5, 137.0], [113.5, 137.0], [56.5, 136.0], [113.5, 136.0], [55.5, 135.0], [113.5, 135.0], [40.5, 134.0], [54.5, 134.0], [113.5, 134.0], [39.5, 133.0], [91.5, 133.0], [38.5, 132.0], [54.5, 132.0], [113.5, 132.0], [55.5, 131.0], [113.5, 131.0], [55.5, 130.0], [112.5, 130.0], [56.5, 129.0], [112.5, 129.0], [57.5, 128.0], [65.5, 128.0], [67.5, 128.0], [112.5, 128.0], [57.5, 127.0], [67.5, 127.0], [112.5, 127.0], [57.5, 126.0], [68.5, 126.0], [111.5, 126.0], [57.5, 125.0], [91.5, 125.0], [50.5, 124.0], [60.5, 124.0], [111.5, 124.0], [59.5, 123.0], [111.5, 123.0], [52.5, 122.0], [51.5, 121.0], [91.5, 121.0], [53.5, 120.0], [49.5, 119.0], [90.5, 119.0], [51.5, 118.0], [47.5, 117.0], [90.5, 117.0], [49.5, 116.0], [41.5, 115.0], [43.5, 115.0], [45.5, 115.0], [89.5, 115.0], [39.5, 114.0], [47.5, 114.0], [47.5, 113.0], [48.5, 112.0], [90.5, 112.0], [89.5, 111.0], [49.5, 110.0], [92.5, 110.0], [50.5, 109.0], [89.5, 109.0], [49.5, 108.0], [89.5, 108.0], [49.5, 107.0], [54.5, 107.0], [56.5, 107.0], [58.5, 107.0], [60.5, 107.0], [62.5, 107.0], [95.5, 107.0], [63.5, 106.0], [95.5, 106.0], [64.5, 105.0], [96.5, 105.0], [65.5, 104.0], [96.5, 104.0], [66.5, 103.0], [96.5, 103.0], [67.5, 102.0], [96.5, 102.0], [68.5, 101.0], [50.5, 100.0], [96.5, 100.0], [66.5, 99.0], [50.5, 98.0], [98.5, 98.0], [64.5, 97.0], [103.5, 97.0], [50.5, 96.0], [100.5, 96.0], [102.5, 96.0], [50.5, 95.0], [106.5, 95.0], [51.5, 94.0], [51.5, 93.0], [51.5, 92.0], [51.5, 91.0], [63.5, 91.0], [61.5, 90.0], [65.5, 90.0], [67.5, 90.0], [69.5, 90.0], [71.5, 90.0], [60.5, 89.0], [72.5, 89.0], [74.5, 89.0], [50.5, 88.0], [68.5, 88.0], [50.5, 87.0], [68.5, 87.0], [50.5, 86.0], [67.5, 86.0], [78.5, 86.0], [61.5, 85.0], [79.5, 85.0], [61.5, 84.0], [80.5, 84.0], [49.5, 83.0], [68.5, 83.0], [81.5, 83.0], [45.5, 82.0], [47.5, 82.0], [70.5, 82.0], [41.5, 81.0], [43.5, 81.0], [71.5, 81.0], [39.5, 80.0], [62.5, 80.0], [73.5, 80.0], [62.5, 79.0], [84.5, 79.0], [75.5, 78.0], [63.5, 77.0], [77.5, 77.0], [62.5, 76.0], [84.5, 76.0], [78.5, 75.0], [85.5, 75.0], [95.5, 75.0], [63.5, 74.0], [85.5, 74.0], [87.5, 74.0], [90.5, 74.0], [96.5, 74.0], [81.5, 73.0], [94.5, 73.0], [64.5, 72.0], [90.5, 72.0], [96.5, 72.0], [83.5, 71.0], [93.5, 71.0], [64.5, 70.0], [85.5, 70.0], [87.5, 70.0], [92.5, 70.0], [88.5, 69.0], [88.5, 68.0], [67.5, 67.0], [88.5, 67.0], [70.5, 66.0], [71.5, 65.0], [72.5, 64.0], [89.5, 64.0], [91.5, 63.0], [91.5, 61.0], [92.5, 59.0], [92.5, 57.0], [93.5, 55.0], [92.5, 53.0], [92.5, 51.0], [93.5, 49.0], [95.5, 49.0], [97.5, 48.0], [99.5, 48.0], [96.5, 47.0], [96.5, 46.0], [95.5, 45.0], [93.5, 43.0], [91.5, 41.0], [89.5, 39.0], [89.5, 37.0], [89.5, 35.0], [89.5, 33.0], [89.5, 31.0], [89.5, 29.0], [88.5, 27.0]]};
+let herpUTM = [];
+const BINS = ["0–2 m","2–5 m","5–10 m","10–20 m","20–30 m",">30 m"];
+const BIN_EDGES = [2,5,10,20,30];
+const BIN_COL = ["#c9a227","#9bbf3a","#4fa35a","#2c7f6b","#285f8f","#5b3f8c"];
+
+/* ---------------- colour helpers ---------------- */
+const hex = h => [parseInt(h.slice(1,3),16)/255, parseInt(h.slice(3,5),16)/255, parseInt(h.slice(5,7),16)/255];
+const BIN_RGB = BIN_COL.map(hex);
+const HAG_STOPS = ["#f2e6a1","#b9d16a","#5fa65a","#2b7a64","#1f4f73","#2a2a5e"].map(hex);
+const ELEV_STOPS = ["#3a4f9a","#3f8fb0","#79c2a0","#d9d98a","#c9875a","#8a4a3a"].map(hex);
+const DIFF_STOPS = ["#2166ac","#92c5de","#f2f2f2","#f4a582","#b2182b"].map(hex);
+function ramp(stops, t) {
+  t = Math.min(1, Math.max(0, t)); const n = stops.length - 1, i = Math.min(n - 1, Math.floor(t * n)), f = t * n - i;
+  const a = stops[i], b = stops[i + 1]; return [a[0] + (b[0]-a[0])*f, a[1] + (b[1]-a[1])*f, a[2] + (b[2]-a[2])*f];
+}
+const cssRamp = stops => `linear-gradient(90deg, ${stops.map((s,i)=>`rgb(${s.map(v=>Math.round(v*255)).join(",")}) ${i/(stops.length-1)*100}%`).join(",")})`;
+const tok = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/* ---------------- three.js scene ---------------- */
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 5000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445544, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(-200, 300, 150); scene.add(sun);
+const world = new THREE.Group(); scene.add(world);
+
+function applyTheme() {
+  scene.background = new THREE.Color(tok("--viewport") || "#e9ede7");
+  if (ring) ring.traverse(o => o.material?.color?.set(tok("--accent")));
+}
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false); camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+
+/* ---------------- state ---------------- */
+const state = { plot: "P1", color: "strata", dtm: "none", size: 1.2, exag: 1 };
+const cache = {};
+let points = null, mesh = null, ring = null, herps = null, prop = null, chan = null, cur = null;
+
+async function load(p) {
+  if (cache[p]) return cache[p];
+  const res = await fetch(`data/${p}.b64.txt`);
+  if (!res.ok) throw new Error(T("errLoad", p, res.status));
+  const bin = atob((await res.text()).trim()), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const buf = bytes.buffer, m = META[p];
+  const u = new Uint16Array(buf, 0, m.n * 4), s = new Int16Array(buf, 0, m.n * 4);
+  const grids = {};
+  m.filters.forEach((f, k) => grids[f] = new Float32Array(buf, m.grid_offset + k * m.grid_w * m.grid_h * 4, m.grid_w * m.grid_h));
+  return (cache[p] = { m, u, s, grids });
+}
+
+function buildPoints(d) {
+  const { m, u, s } = d, n = m.n, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    pos[i*3]   = u[i*4] / 100 - m.width / 2;
+    pos[i*3+1] = u[i*4+2] / 100;
+    pos[i*3+2] = -(u[i*4+1] / 100 - m.height / 2);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  const mat = new THREE.PointsMaterial({ size: state.size * 0.12, vertexColors: true, sizeAttenuation: true });
+  return new THREE.Points(g, mat);
+}
+
+function colorPoints() {
+  if (!points) return;
+  const { m, u, s } = cur, col = points.geometry.attributes.color.array, n = m.n;
+  const hmax = Math.max(10, m.hag_p99), zmax = m.zrange[1], op = orthoPix[plotKey(state.plot)];
+  for (let i = 0; i < n; i++) {
+    const h = s[i*4+3] / 100; let c;
+    if (state.color === "strata") { let b = 0; while (b < 5 && h >= BIN_EDGES[b]) b++; c = BIN_RGB[b]; }
+    else if (state.color === "hag") c = ramp(HAG_STOPS, h / hmax);
+    else if (state.color === "ortho" && op) {
+      const px = Math.min(op.width - 1, Math.max(0, Math.floor(u[i*4] / 100 / m.width * op.width)));
+      const py = Math.min(op.height - 1, Math.max(0, Math.floor((1 - u[i*4+1] / 100 / m.height) * op.height)));
+      const q = (py * op.width + px) * 4; c = [Math.pow(op.data[q] / 255, 2.2), Math.pow(op.data[q+1] / 255, 2.2), Math.pow(op.data[q+2] / 255, 2.2)];
+    }
+    else c = ramp(ELEV_STOPS, (u[i*4+2] / 100) / zmax);
+    col[i*3] = c[0]; col[i*3+1] = c[1]; col[i*3+2] = c[2];
+  }
+  points.geometry.attributes.color.needsUpdate = true;
+  renderLegend();
+}
+
+const refFilter = m => m.filters.includes("terra") ? "terra" : "smrf";
+
+function buildMesh(d, f) {
+  const { m, grids } = d, W = m.grid_w, H = m.grid_h, c = m.grid_cell, z = grids[f], ref = grids[refFilter(m)];
+  const pos = new Float32Array(W * H * 3), col = new Float32Array(W * H * 3), idx = [];
+  const same = f === refFilter(m);
+  for (let r = 0; r < H; r++) for (let k = 0; k < W; k++) {
+    const i = r * W + k, v = z[i];
+    pos[i*3] = (k + 0.5) * c - m.width / 2; pos[i*3+1] = isFinite(v) ? v : 0; pos[i*3+2] = -((m.height - (r + 0.5) * c) - m.height / 2);
+    const dz = v - ref[i];
+    const cc = same || !isFinite(dz) ? [0.72, 0.70, 0.66] : ramp(DIFF_STOPS, (dz + 1) / 2);
+    col[i*3] = cc[0]; col[i*3+1] = cc[1]; col[i*3+2] = cc[2];
+  }
+  const ok = i => isFinite(z[i]);
+  for (let r = 0; r < H - 1; r++) for (let k = 0; k < W - 1; k++) {
+    const a = r*W+k, b = a+1, cI = a+W, dI = cI+1;
+    if (ok(a) && ok(b) && ok(cI)) idx.push(a, cI, b);
+    if (ok(b) && ok(cI) && ok(dI)) idx.push(b, cI, dI);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  return new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+}
+
+function dtmStats(d, f) {
+  const { m, grids } = d, ref = grids[refFilter(m)], z = grids[f], diffs = [];
+  for (let i = 0; i < z.length; i++) { const v = z[i] - ref[i]; if (isFinite(v)) diffs.push(v); }
+  diffs.sort((a, b) => a - b);
+  const med = diffs[Math.floor(diffs.length / 2)];
+  const dev = diffs.map(v => Math.abs(v - med)).sort((a, b) => a - b);
+  const abs = diffs.map(Math.abs).sort((a, b) => a - b);
+  return { median: med, nmad: 1.4826 * dev[Math.floor(dev.length / 2)], p95: abs[Math.floor(abs.length * 0.95)] };
+}
+
+function groundAt(d, x, y) {
+  const { m, grids } = d, z = grids.csf, W = m.grid_w, H = m.grid_h, c = m.grid_cell;
+  const k = Math.min(W - 1, Math.max(0, Math.floor(x / c))), r = Math.min(H - 1, Math.max(0, Math.floor((m.height - y) / c)));
+  const h = z[r * W + k]; return isFinite(h) ? h : null;
+}
+const toLocal = (p, e, n) => [e - ORIGIN[p][0], n - ORIGIN[p][1]];
+
+/* ---------------- orthophoto (P1, P3) ---------------- */
+const HAS_ORTHO = { P1: true, P3: true };
+const orthoImg = {}, orthoPix = {};
+let ortho = null, orthoMode = "off";
+function loadOrtho(p) {
+  if (!orthoImg[p]) orthoImg[p] = new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => {
+      const cv = document.createElement("canvas"); cv.width = im.width; cv.height = im.height;
+      const cx = cv.getContext("2d"); cx.drawImage(im, 0, 0);
+      orthoPix[p] = cx.getImageData(0, 0, im.width, im.height); res(im);
+    };
+    im.onerror = () => { delete orthoImg[p]; rej(new Error("ortho")); };
+    im.src = `data/ortho_${p}.jpg`;
+  });
+  return orthoImg[p];
+}
+function buildOrtho(d, p, img, flat) {
+  const { m, u } = d, n = m.n, c = 1, W = Math.ceil(m.width / c) + 1, H = Math.ceil(m.height / c) + 1;
+  let z = new Float32Array(W * H).fill(-Infinity);
+  for (let i = 0; i < n; i++) {
+    const k = Math.round(u[i*4] / 100 / c), r = Math.round(u[i*4+1] / 100 / c);
+    if (k < 0 || r < 0 || k >= W || r >= H) continue;
+    const v = u[i*4+2] / 100, j = r * W + k; if (v > z[j]) z[j] = v;
+  }
+  for (let pass = 0; pass < 3; pass++) {
+    const nz = z.slice();
+    for (let r = 0; r < H; r++) for (let k = 0; k < W; k++) {
+      const j = r * W + k; if (isFinite(z[j])) continue;
+      let s = 0, cnt = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dk = -1; dk <= 1; dk++) {
+        const rr = r + dr, kk = k + dk; if (rr < 0 || kk < 0 || rr >= H || kk >= W) continue;
+        const v = z[rr * W + kk]; if (isFinite(v)) { s += v; cnt++; }
+      }
+      if (cnt) nz[j] = s / cnt;
+    }
+    z = nz;
+  }
+  { // light 3x3 smoothing so gaps between crowns do not become spikes
+    const sz = z.slice();
+    for (let r = 1; r < H - 1; r++) for (let k = 1; k < W - 1; k++) {
+      let s = 0, cnt = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dk = -1; dk <= 1; dk++) { const v = z[(r+dr)*W+k+dk]; if (isFinite(v)) { s += v; cnt++; } }
+      if (cnt) sz[r*W+k] = 0.5 * (isFinite(z[r*W+k]) ? z[r*W+k] : s / cnt) + 0.5 * s / cnt;
+    }
+    z = sz;
+  }
+  const op = orthoPix[p];
+  const inPhoto = (x, y) => { // outside the plot boundary the ortho is filled with grey (205, 210, 200)
+    if (!op) return true;
+    const px = Math.min(op.width - 1, Math.floor(x / m.width * op.width)), py = Math.min(op.height - 1, Math.floor((1 - y / m.height) * op.height));
+    const q = (py * op.width + px) * 4;
+    return !(Math.abs(op.data[q] - 205) < 14 && Math.abs(op.data[q+1] - 210) < 14 && Math.abs(op.data[q+2] - 200) < 14);
+  };
+  const pos = new Float32Array(W * H * 3), uv = new Float32Array(W * H * 2), inside = new Uint8Array(W * H), idx = [];
+  for (let r = 0; r < H; r++) for (let k = 0; k < W; k++) {
+    const j = r * W + k, x = k * c, y = r * c;
+    const g = groundAt(d, Math.min(x, m.width - 0.01), Math.min(y, m.height - 0.01));
+    inside[j] = g !== null && isFinite(z[j]) && inPhoto(Math.min(x, m.width - 0.01), Math.min(y, m.height - 0.01)) ? 1 : 0;
+    const h = flat ? m.zrange[1] + 1 : (isFinite(z[j]) ? z[j] : (g ?? 0));
+    pos[j*3] = x - m.width / 2; pos[j*3+1] = h; pos[j*3+2] = -(y - m.height / 2);
+    uv[j*2] = x / m.width; uv[j*2+1] = y / m.height;
+  }
+  for (let r = 0; r < H - 1; r++) for (let k = 0; k < W - 1; k++) {
+    const a = r*W+k, b = a+1, cI = a+W, dI = cI+1;
+    if (inside[a] && inside[b] && inside[cI]) idx.push(a, b, cI);
+    if (inside[b] && inside[dI] && inside[cI]) idx.push(b, dI, cI);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  const tex = new THREE.Texture(img); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; tex.needsUpdate = true;
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+  mesh.userData.dispose = () => { geo.dispose(); tex.dispose(); mesh.material.dispose(); };
+  return mesh;
+}
+async function syncOrtho() {
+  const p = plotKey(state.plot), want = orthoMode !== "off" && HAS_ORTHO[p] && cur;
+  if (ortho && (!want || ortho.userData.plot !== state.plot || ortho.userData.mode !== orthoMode)) { world.remove(ortho); ortho.userData.dispose(); ortho = null; }
+  if (!want || ortho) return;
+  const k = state.plot;
+  try {
+    const img = await loadOrtho(p);
+    if (state.plot !== k || ortho || orthoMode === "off") return;
+    const mode = orthoMode;
+    ortho = buildOrtho(cur, p, img, mode === "flat"); ortho.userData.plot = k; ortho.userData.mode = mode; world.add(ortho);
+  } catch (e) { document.getElementById("orthoNote").textContent = T("orthoNo"); }
+}
+function syncOrthoUi() {
+  const has = !!HAS_ORTHO[plotKey(state.plot)];
+  document.getElementById("orthoNote").textContent = T(has ? "orthoYes" : "orthoNo");
+  document.querySelectorAll("#orthoSeg button").forEach(b => { b.disabled = !has && b.dataset.v !== "off"; });
+  document.getElementById("orthoFull").disabled = !has;
+  if (!has && orthoMode !== "off") { orthoMode = "off"; pressed(document.getElementById("orthoSeg"), "off"); }
+  const ob = document.querySelector('#colorSeg button[data-v="ortho"]'); ob.disabled = !has;
+  if (!has && state.color === "ortho") { state.color = "strata"; pressed(document.getElementById("colorSeg"), "strata"); }
+}
+const v3 = (m, x, y, h) => new THREE.Vector3(x - m.width / 2, h, -(y - m.height / 2));
+
+function buildCamera(d, p) {
+  const { m } = d, [, e, n] = CAMS[p], [cx, cy] = toLocal(p, e, n), g = new THREE.Group();
+  const accent = new THREE.Color(tok("--accent"));
+  [25, 50].forEach(R => {
+    const pts = [];
+    for (let a = 0; a <= 128; a++) {
+      const t = a / 128 * Math.PI * 2, x = cx + R * Math.cos(t), y = cy + R * Math.sin(t);
+      pts.push(v3(m, x, y, (groundAt(d, x, y) ?? 0) + 0.6));
+    }
+    const mat = R === 50 ? new THREE.LineBasicMaterial({ color: accent })
+                         : new THREE.LineDashedMaterial({ color: accent, dashSize: 3, gapSize: 2 });
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
+    if (R === 25) line.computeLineDistances();
+    g.add(line);
+  });
+  const h0 = groundAt(d, cx, cy) ?? 0;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 14, 10), new THREE.MeshBasicMaterial({ color: accent, depthTest: false }));
+  pole.position.copy(v3(m, cx, cy, h0 + 7)); g.add(pole);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshBasicMaterial({ color: accent, depthTest: false }));
+  head.position.copy(v3(m, cx, cy, h0 + 16)); g.add(head);
+  pole.renderOrder = head.renderOrder = 10;
+  g.userData.dispose = () => g.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
+  return g;
+}
+
+function buildProposed(d, p) {
+  const { m } = d, g = new THREE.Group(), plot = p.split("_")[0];
+  const geo = new THREE.ConeGeometry(2.2, 5, 4), mat = new THREE.MeshBasicMaterial({ color: 0x1aa39a, depthTest: false });
+  (HERP_PROP[plot] || []).forEach(([id, e, n]) => {
+    const [x, y] = toLocal(p, e, n), h = groundAt(d, x, y); if (h === null) return;
+    const c = new THREE.Mesh(geo, mat); c.rotation.x = Math.PI; c.renderOrder = 11; c.position.copy(v3(m, x, y, h + 3)); g.add(c);
+  });
+  g.userData.dispose = () => { geo.dispose(); mat.dispose(); };
+  return g;
+}
+
+function buildChannels(d, p) {
+  const { m } = d, src = p === "P4_E2" ? "P4_E1" : p, cells = CHANNELS[src] || [], pos = [];
+  const dx = ORIGIN[src][0] - ORIGIN[p][0], dy = ORIGIN[src][1] - ORIGIN[p][1];
+  cells.forEach(([x0, y0]) => {
+    const x = x0 + dx, y = y0 + dy, h = groundAt(d, x, y); if (h === null) return;
+    const v = v3(m, x, y, h + 0.4); pos.push(v.x, v.y, v.z);
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x2b83d9, size: 1.6, sizeAttenuation: true, depthTest: false }));
+  pts.userData.dispose = () => { g.dispose(); pts.material.dispose(); };
+  return pts;
+}
+
+function buildHerps(d, p) {
+  const { m } = d, g = new THREE.Group(); let inPlot = 0;
+  const geo = new THREE.SphereGeometry(2.6, 16, 12), mat = new THREE.MeshBasicMaterial({ color: 0xa34fd6, depthTest: false });
+  herpUTM.forEach(([e, n]) => {
+    const [x, y] = toLocal(p, e, n);
+    if (x < 0 || y < 0 || x > m.width || y > m.height) return;
+    const h = groundAt(d, x, y); if (h === null) return;
+    const s = new THREE.Mesh(geo, mat); s.renderOrder = 11; s.position.copy(v3(m, x, y, h + 2.6)); g.add(s); inPlot++;
+  });
+  g.userData.count = inPlot;
+  g.userData.dispose = () => { geo.dispose(); mat.dispose(); };
+  return g;
+}
+
+function frame(m) {
+  const span = Math.max(m.width, m.height), fit = 1.15 / Math.min(1, camera.aspect);
+  controls.target.set(0, m.zrange[1] * 0.35 * state.exag, 0);
+  camera.position.set(span * 0.75 * fit, (span * 0.7 + m.zrange[1] * state.exag) * fit, span * 0.95 * fit);
+  camera.near = span / 400; camera.far = span * 20; camera.updateProjectionMatrix(); controls.update();
+}
+
+
+/* ---------------- language (English / Thai) ---------------- */
+const I18N = {
+  en: {
+    title: "Pilot Plots in 3D",
+    canvas: "3D point cloud of the selected pilot plot",
+    loading: "Loading point cloud…",
+    h1: "Pilot plots P1–P4, UAV-LiDAR, Aug 2026",
+    lede: "Real L1 point clouds (thinned for the browser) with the four DTMs. Drag to orbit, scroll or pinch to zoom.",
+    hPlot: "Plot", hColor: "Colour points by", cStrata: "Height strata", cHag: "Height above ground", cElev: "Elevation",
+    hDtm: "Ground surface (DTM)", hView: "View", lSize: "Point size", lExag: "Vertical exaggeration", lPts: "Show points",
+    lRing: "Camera and 25 / 50 m rings", lProp: "Proposed herp points", lChan: "Drainage lines (from DTM)", lHerp: "Herp points from file",
+    hFacts: "Plot facts", hCam: "Camera trap",
+    camNote: "LiDAR values inside the 25 m and 50 m buffers around the camera, from camera_buffer_metrics.csv (Aug 2026 flights). These are the numbers one camera site contributes to the mammal model.",
+    hHerp: "Herp survey points",
+    propNote: "Proposed sites (teal) on low ground next to drainage lines inferred from the CSF DTM: lowest 30% of the plot, lower than the ground within 15 m, ≤10 m from a channel, ≥30 m apart. In P3 the drainage lines are old tin-mine trenches. Check each point in the field.",
+    herpNote: "Records from the published PhD study have not been received yet. Load them here when they arrive.",
+    herpBtn: "Load herp points (CSV)",
+    herpCols: "Columns: <code>easting,northing</code> in EPSG:32647, optional <code>label</code>. The file is read in this browser only and is not uploaded, so sensitive species stay off the page.",
+    hStrata: "Share of first returns by height (covariate bins)",
+    strataNote: "Bins are the ones fixed in plan v5.1 §8. Values from the pilot canopy metrics table.",
+    hAgree: "DTM agreement (pilot table, 0.5 m)",
+    agreeNote: "NMAD and 95th percentile of |Δz| in metres. The P4 repeat flight (CSF, 15 vs 17 Aug) gives the measurement-noise floor: NMAD 0.13 m.",
+    hModel: "Where these values go in the model",
+    m1a: "Canopy cover, height p95", m1b: "canopy birds, arboreal mammals",
+    m2a: "Returns 0–2 m, 2–5 m", m2b: "ground and understorey birds, ground mammals",
+    m3a: "Vertical diversity (5–30 m)", m3b: "midstorey birds",
+    m4a: "Slope, TPI, TWI, drainage (from the DTM)", m4b: "herps, ground mammals",
+    modelNote: "Each count point or camera gets these values averaged inside the orange 50 m ring around it. Choosing a different DTM moves every height value and every terrain variable, which is why the ground-filter comparison feeds the sensitivity analysis.",
+    errLoad: (p, st) => `Could not load the ${p} point cloud (HTTP ${st}). Reload the page to try again.`,
+    herpNeedCols: "The file needs columns named easting and northing (EPSG:32647).",
+    herpLoaded: (n, c) => `${n} points loaded from your file; ${c} fall inside this plot.`,
+    hide: "Hide",
+    dtmPick: (ref) => `Pick a DTM to drape it under the points. It is coloured by its difference from ${ref}.`,
+    dtmRef: (ref) => `${ref} is the reference surface here, shown in grey.`,
+    dtmDiff: (f, ref, a, b, c) => `${f} minus ${ref}, 2 m grid: median ${a} m, NMAD ${b} m, 95% of |Δz| below ${c} m.`,
+    lgHag: "Height above ground", lgHagM: "Height above ground (m)", lgElev: "Elevation above lowest DTM cell (m)", lgDiff: "DTM difference (m)",
+    hudSub: (f, n) => `${f} · ${n} of the plot's points shown`,
+    fForest: "Forest type", fFlight: "Flight", fExtent: "Extent", fRelief: "Terrain relief (CSF)", fCov2: "Canopy cover >2 m",
+    fCov5: "Canopy cover >5 m", fHp95: "Height p95", fChm: "CHM p95", m: "m",
+    cCam: "Camera", cPos: "Position", cStatus: "Status",
+    stP4: "Placeholder · trial plot only", stOther: "Placeholder · replace with GNSS fix",
+    tRun: "Run", tCover: "Cover", tPoint: "Point", tElev: "Elev. %ile", tUp: "Upslope (m²)", tPair: "Pair",
+    hSp: "Species lists",
+    spNote: "<span class=\"badge b-lit\">Recorded</span> = seen or signs found at Khao Krachom (Lerdsuchatavanich, 2016). <span class=\"badge b-mock\">MOCK</span> = made-up checklist used to test the model; not real records. Click a group to open the full list.",
+    spTitle: "Species lists · Khao Krachom", close: "Close",
+    gBird: "Birds", gMm: "Mammals", gHerp: "Herps",
+    pAll: "All plots",
+    cOrtho: "True colour (ortho)", lOrtho: "Orthophoto", oOff: "Off", oFlat: "Flat photo", oSurf: "On canopy surface",
+    topView: "View from above", orthoFull: "Open full photo",
+    orthoTitle: (p) => `Orthophoto · ${p}`,
+    orthoCap: (p) => `${p}, ODM orthophoto from the L1 camera, Aug 2026, resampled to 15 cm and clipped to the plot boundary. North is up.`, lgOrtho: "True colour from the orthophoto",
+    orthoYes: "Flat photo lays the orthophoto out as a picture above the plot; On canopy surface drapes it on a 1 m canopy model from the LiDAR. Turn points off for a clean view.",
+    orthoNo: "No orthophoto for this plot yet; only P1 and P3 have one.",
+    spThis: (p, a, b, c) => `Open list for ${p} (MOCK): ${a} birds · ${b} mammals · ${c} herps`,
+    spPlotNote: "Plot columns show MOCK species expected from their forest type (Multiple = all plots). Real records are not yet tied to plots; plot-level data will come from the bird points, cameras and herp sites.",
+    fAll: "All", fLit: "Recorded", fBoth: "In both", fMock: "MOCK only", search: "Search name…",
+    spCard: (a, b) => `${a} recorded · ${b} MOCK`,
+    spCount: (n, a, b, c) => `${n} species shown · ${a} recorded only · ${b} in both · ${c} MOCK only`,
+    thName: "Name", thSci: "Scientific name", thIucn: "IUCN", thLayer: "Layer used", thMock: "MOCK list", thLit: "Recorded 2016", thNote: "Note",
+    mockT: { Confirmed: "Confirmed", Expected: "Expected", Listed: "Listed" },
+    litT: { sign: "Signs", sight: "Seen" },
+    srcT: (x) => `Name in source: ${x}`, sensT: "Sensitive: coordinates hidden",
+    spFoot: "Recorded species come from transect signs and sightings over six months (Nov–May) in Lerdsuchatavanich (2016), with names updated to current taxonomy; six unidentified birds are left out. These records are not tied to plots P1–P4. MOCK rows are invented for testing and will be replaced by the real checklists. IUCN categories of recorded-only species still need checking.",
+    layerT: { Ground: "Ground", Understorey: "Understorey", Midstorey: "Midstorey", Canopy: "Canopy", Aerial: "Aerial", Arboreal: "Arboreal", "Semi-arboreal": "Semi-arboreal", Stream: "Stream", "Leaf litter": "Leaf litter", Fossorial: "Fossorial", "Rock-crevice": "Rock crevice", "Pond-wetland": "Pond, wetland" },
+    plots: {
+      P1: { label: "P1", forest: "Hill evergreen (summit)", note: "Single flight direction", flag: "1 direction" },
+      P2: { label: "P2", forest: "Dry evergreen", note: "Cross-hatch, 2 directions" },
+      P3: { label: "P3", forest: "Mixed deciduous", note: "Cross-hatch, GCPs surveyed" },
+      P4_E1: { label: "P4 · 15 Aug", forest: "Community forest", note: "Repeat flight, epoch 1" },
+      P4_E2: { label: "P4 · 17 Aug", forest: "Community forest", note: "Repeat flight, epoch 2" },
+    },
+  },
+  th: {
+    title: "แปลงทดลองแบบ 3 มิติ",
+    canvas: "พอยต์คลาวด์ 3 มิติ ของแปลงทดลองที่เลือก",
+    loading: "กำลังโหลดพอยต์คลาวด์…",
+    h1: "แปลงทดลอง P1–P4 · UAV-LiDAR · ส.ค. 2569",
+    lede: "พอยต์คลาวด์จริงจาก L1 (ลดจำนวนจุดให้เปิดในเบราว์เซอร์ได้) พร้อมแบบจำลองพื้นดิน (DTM) 4 วิธี ลากเพื่อหมุน เลื่อนลูกกลิ้งหรือถ่างนิ้วเพื่อซูม",
+    hPlot: "แปลง", hColor: "ระบายสีจุดตาม", cStrata: "ชั้นความสูง", cHag: "ความสูงจากพื้น", cElev: "ระดับความสูง",
+    hDtm: "พื้นผิวดิน (DTM)", hView: "การแสดงผล", lSize: "ขนาดจุด", lExag: "ขยายแนวดิ่ง", lPts: "แสดงจุด",
+    lRing: "กล้อง และวงรัศมี 25 / 50 ม.", lProp: "จุดสำรวจ herp ที่เสนอ", lChan: "ร่องน้ำ (จาก DTM)", lHerp: "จุด herp จากไฟล์",
+    hFacts: "ข้อมูลแปลง", hCam: "กล้องดักถ่าย",
+    camNote: "ค่า LiDAR ภายในวงรัศมี 25 ม. และ 50 ม. รอบกล้อง จาก camera_buffer_metrics.csv (บินเดือน ส.ค. 2569) เป็นค่าที่กล้องหนึ่งจุด ส่งเข้าแบบจำลองสัตว์เลี้ยงลูกด้วยนม",
+    hHerp: "จุดสำรวจ herp (สัตว์เลื้อยคลานและสัตว์สะเทินน้ำสะเทินบก)",
+    propNote: "จุดที่เสนอ (สีเขียวอมฟ้า) อยู่บนที่ต่ำ ติดร่องน้ำที่คำนวณจาก DTM วิธี CSF: อยู่ใน 30% ที่ต่ำที่สุดของแปลง ต่ำกว่าพื้นโดยรอบในรัศมี 15 ม. ห่างร่องน้ำไม่เกิน 10 ม. และห่างกันอย่างน้อย 30 ม. ใน P3 ร่องน้ำคือร่องเหมืองดีบุกเก่า ตรวจทุกจุดในสนามก่อนใช้",
+    herpNote: "ยังไม่ได้รับข้อมูลจุดพบจากงานวิจัยปริญญาเอกที่ตีพิมพ์แล้ว โหลดเข้ามาที่นี่เมื่อได้รับ",
+    herpBtn: "โหลดจุด herp (CSV)",
+    herpCols: "คอลัมน์ <code>easting,northing</code> ในระบบ EPSG:32647 และ <code>label</code> (ไม่บังคับ) ไฟล์ถูกอ่านในเบราว์เซอร์นี้เท่านั้น ไม่ถูกอัปโหลด พิกัดชนิดอ่อนไหวจึงไม่อยู่บนหน้านี้",
+    hStrata: "สัดส่วนจุดสะท้อนแรกตามชั้นความสูง (ช่วงของตัวแปร)",
+    strataNote: "ช่วงความสูงตามแผน v5.1 ข้อ 8 ค่ามาจากตารางตัวชี้วัดเรือนยอดของแปลงทดลอง",
+    hAgree: "ความสอดคล้องของ DTM (ตาราง pilot, 0.5 ม.)",
+    agreeNote: "NMAD และเปอร์เซ็นไทล์ที่ 95 ของ |Δz| หน่วยเมตร การบินซ้ำ P4 (CSF, 15 กับ 17 ส.ค.) ให้ค่าคลาดของการวัด: NMAD 0.13 ม.",
+    hModel: "ค่าเหล่านี้ใช้ในแบบจำลองอย่างไร",
+    m1a: "ความปกคลุมเรือนยอด ความสูง p95", m1b: "นกเรือนยอด สัตว์เลี้ยงลูกด้วยนมบนต้นไม้",
+    m2a: "จุดสะท้อน 0–2 ม. และ 2–5 ม.", m2b: "นกพื้นป่าและไม้พื้นล่าง สัตว์เลี้ยงลูกด้วยนมที่หากินบนพื้น",
+    m3a: "ความหลากหลายแนวดิ่ง (5–30 ม.)", m3b: "นกเรือนยอดชั้นกลาง",
+    m4a: "ความชัน TPI TWI ร่องน้ำ (จาก DTM)", m4b: "herp สัตว์เลี้ยงลูกด้วยนมที่หากินบนพื้น",
+    modelNote: "จุดนับนกหรือกล้องแต่ละจุด ได้ค่าเฉลี่ยภายในวงรัศมี 50 ม. สีส้มรอบตัว ถ้าเปลี่ยน DTM ค่าความสูงและตัวแปรภูมิประเทศทุกตัวจะเปลี่ยนตาม การเปรียบเทียบวิธีจำแนกจุดพื้นดิน จึงเป็นฐานของการวิเคราะห์ความอ่อนไหว",
+    errLoad: (p, st) => `โหลดพอยต์คลาวด์ ${p} ไม่สำเร็จ (HTTP ${st}) ลองโหลดหน้าใหม่อีกครั้ง`,
+    herpNeedCols: "ไฟล์ต้องมีคอลัมน์ชื่อ easting และ northing (EPSG:32647)",
+    herpLoaded: (n, c) => `โหลด ${n} จุดจากไฟล์ อยู่ในแปลงนี้ ${c} จุด`,
+    hide: "ซ่อน",
+    dtmPick: (ref) => `เลือก DTM เพื่อแสดงใต้จุด สีแสดงความต่างจาก ${ref}`,
+    dtmRef: (ref) => `${ref} เป็นพื้นผิวอ้างอิงของแปลงนี้ แสดงเป็นสีเทา`,
+    dtmDiff: (f, ref, a, b, c) => `${f} ลบ ${ref} กริด 2 ม.: ค่ามัธยฐาน ${a} ม. NMAD ${b} ม. และ 95% ของ |Δz| ต่ำกว่า ${c} ม.`,
+    lgHag: "ความสูงจากพื้น", lgHagM: "ความสูงจากพื้น (ม.)", lgElev: "ความสูงเหนือจุดต่ำสุดของ DTM (ม.)", lgDiff: "ความต่างของ DTM (ม.)",
+    hudSub: (f, n) => `${f} · แสดง ${n} จุดของแปลง`,
+    fForest: "ชนิดป่า", fFlight: "การบิน", fExtent: "ขนาดแปลง", fRelief: "ความต่างระดับพื้นที่ (CSF)", fCov2: "ความปกคลุมเรือนยอด >2 ม.",
+    fCov5: "ความปกคลุมเรือนยอด >5 ม.", fHp95: "ความสูง p95", fChm: "CHM p95", m: "ม.",
+    cCam: "กล้อง", cPos: "ตำแหน่ง", cStatus: "สถานะ",
+    stP4: "ตำแหน่งสมมติ · แปลงทดลองเท่านั้น", stOther: "ตำแหน่งสมมติ · รอพิกัด GNSS จริง",
+    tRun: "รอบบิน", tCover: "ความปกคลุม", tPoint: "จุด", tElev: "เปอร์เซ็นไทล์ความสูง", tUp: "พื้นที่รับน้ำ (ม.²)", tPair: "คู่ที่เทียบ",
+    hSp: "รายชื่อชนิด",
+    spNote: "<span class=\"badge b-lit\">พบจริง</span> = พบตัวหรือร่องรอยที่เขากระโจม (Lerdsuchatavanich, 2016) <span class=\"badge b-mock\">MOCK</span> = รายชื่อสมมติ ใช้ทดสอบแบบจำลอง ไม่ใช่ข้อมูลจริง กดที่กลุ่มเพื่อเปิดรายชื่อทั้งหมด",
+    spTitle: "รายชื่อชนิด · เขากระโจม", close: "ปิด",
+    gBird: "นก", gMm: "สัตว์เลี้ยงลูกด้วยนม", gHerp: "herp",
+    pAll: "ทุกแปลง",
+    cOrtho: "สีจริง (ortho)", lOrtho: "ภาพถ่ายออร์โธ", oOff: "ปิด", oFlat: "ภาพถ่าย (แบน)", oSurf: "บนผิวเรือนยอด",
+    topView: "มุมมองจากด้านบน", orthoFull: "เปิดภาพเต็ม",
+    orthoTitle: (p) => `ภาพถ่ายออร์โธ · ${p}`,
+    orthoCap: (p) => `${p} ภาพออร์โธจาก ODM ใช้ภาพกล้อง L1 เดือน ส.ค. 2569 ย่อเป็น 15 ซม. ตัดตามขอบเขตแปลง ทิศเหนืออยู่ด้านบน`, lgOrtho: "สีจริงจากภาพถ่ายออร์โธ",
+    orthoYes: "ภาพถ่าย (แบน) วางภาพออร์โธเป็นแผ่นภาพเหนือแปลง ส่วนบนผิวเรือนยอด วางภาพบนผิวเรือนยอดละเอียด 1 ม. ที่สร้างจาก LiDAR ปิดการแสดงจุดเพื่อดูภาพให้ชัด",
+    orthoNo: "แปลงนี้ยังไม่มีภาพออร์โธ มีเฉพาะ P1 และ P3",
+    spThis: (p, a, b, c) => `เปิดรายชื่อแปลง ${p} (MOCK): นก ${a} · สัตว์ฯ ${b} · herp ${c}`,
+    spPlotNote: "ช่องแปลงแสดงชนิด MOCK ที่คาดว่าพบตามชนิดป่า (Multiple = ทุกแปลง) ชนิดที่พบจริงยังไม่ได้ผูกกับแปลง ข้อมูลรายแปลงจริงจะมาจากจุดนับนก กล้อง และจุดสำรวจ herp",
+    fAll: "ทั้งหมด", fLit: "พบจริง", fBoth: "อยู่ทั้งสองแหล่ง", fMock: "MOCK อย่างเดียว", search: "ค้นหาชื่อ…",
+    spCard: (a, b) => `พบจริง ${a} · MOCK ${b}`,
+    spCount: (n, a, b, c) => `แสดง ${n} ชนิด · พบจริงอย่างเดียว ${a} · อยู่ทั้งสองแหล่ง ${b} · MOCK อย่างเดียว ${c}`,
+    thName: "ชื่อ", thSci: "ชื่อวิทยาศาสตร์", thIucn: "IUCN", thLayer: "ชั้นที่ใช้", thMock: "รายชื่อ MOCK", thLit: "พบจริง 2559", thNote: "หมายเหตุ",
+    mockT: { Confirmed: "ยืนยันแล้ว", Expected: "คาดว่าพบ", Listed: "อยู่ในรายชื่อ" },
+    litT: { sign: "ร่องรอย", sight: "พบตัว" },
+    srcT: (x) => `ชื่อในต้นฉบับ: ${x}`, sensT: "ชนิดอ่อนไหว ไม่แสดงพิกัด",
+    spFoot: "ชนิดที่พบจริงมาจากการสำรวจร่องรอยและพบตัวตามเส้นทาง 6 เดือน (พ.ย.–พ.ค.) ใน Lerdsuchatavanich (2016) ปรับชื่อวิทยาศาสตร์ให้เป็นปัจจุบัน ไม่รวมนกที่ไม่ทราบชนิด 6 ชนิด บันทึกเหล่านี้ไม่ได้ผูกกับแปลง P1–P4 แถว MOCK เป็นข้อมูลสมมติเพื่อทดสอบ จะแทนด้วยรายชื่อจริง ส่วนสถานภาพ IUCN ของชนิดที่พบจริงอย่างเดียว ยังต้องตรวจ",
+    layerT: { Ground: "พื้นดิน", Understorey: "ไม้พื้นล่าง", Midstorey: "เรือนยอดชั้นกลาง", Canopy: "เรือนยอด", Aerial: "กลางอากาศ", Arboreal: "บนต้นไม้", "Semi-arboreal": "กึ่งต้นไม้", Stream: "ลำธาร", "Leaf litter": "ซากใบไม้", Fossorial: "ใต้ดิน", "Rock-crevice": "ซอกหิน", "Pond-wetland": "แหล่งน้ำนิ่ง" },
+    plots: {
+      P1: { label: "P1", forest: "ป่าดิบเขา (ยอดเขา)", note: "บินทิศเดียว", flag: "บินทิศเดียว" },
+      P2: { label: "P2", forest: "ป่าดิบแล้ง", note: "บินไขว้ 2 ทิศ" },
+      P3: { label: "P3", forest: "ป่าเบญจพรรณ", note: "บินไขว้ รังวัด GCP แล้ว" },
+      P4_E1: { label: "P4 · 15 ส.ค.", forest: "ป่าชุมชน", note: "บินซ้ำ ครั้งที่ 1" },
+      P4_E2: { label: "P4 · 17 ส.ค.", forest: "ป่าชุมชน", note: "บินซ้ำ ครั้งที่ 2" },
+    },
+  },
+};
+let LANG = "en";
+try { LANG = localStorage.getItem("pilot3d-lang") || ""; } catch (e) { LANG = ""; }
+if (!I18N[LANG]) LANG = (navigator.language || "").toLowerCase().startsWith("th") ? "th" : "en";
+const T = (k, ...a) => { const v = I18N[LANG][k] ?? I18N.en[k]; return typeof v === "function" ? v(...a) : v; };
+const PT = (k) => I18N[LANG].plots[k];
+const nfmt = (n) => n.toLocaleString(LANG === "th" ? "th-TH" : "en");
+function applyStatic() {
+  document.documentElement.lang = LANG;
+  document.title = T("title");
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.innerHTML = T(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => el.setAttribute("placeholder", T(el.dataset.i18nPh)));
+  document.querySelectorAll("[data-i18n-aria]").forEach(el => el.setAttribute("aria-label", T(el.dataset.i18nAria)));
+  document.querySelectorAll("#langSeg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === LANG)));
+  document.querySelectorAll("#plotSeg button").forEach(b => { b.textContent = PT(b.dataset.v).label; });
+}
+
+/* ---------------- UI ---------------- */
+const statusEl = document.getElementById("status");
+function pressed(seg, v) { seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v))); }
+
+const plotSeg = document.getElementById("plotSeg");
+Object.entries(PLOTS).forEach(([k, p]) => {
+  const b = document.createElement("button"); b.dataset.v = k; b.textContent = PT(k).label; b.setAttribute("aria-pressed", String(k === state.plot));
+  b.onclick = () => selectPlot(k); plotSeg.append(b);
+});
+document.getElementById("colorSeg").addEventListener("click", e => {
+  const btn = e.target.closest("button"), v = btn?.dataset.v; if (!v || btn.disabled) return; state.color = v; pressed(e.currentTarget, v);
+  if (v === "ortho") loadOrtho(plotKey(state.plot)).then(colorPoints).catch(() => {}); else colorPoints();
+});
+const dtmSeg = document.getElementById("dtmSeg");
+dtmSeg.addEventListener("click", e => {
+  const v = e.target.closest("button")?.dataset.v; if (!v) return; state.dtm = v; pressed(dtmSeg, v); updateMesh();
+});
+document.getElementById("ptSize").oninput = e => { state.size = +e.target.value; if (points) points.material.size = state.size * 0.12; };
+document.getElementById("exag").oninput = e => { state.exag = +e.target.value; world.scale.y = state.exag; };
+document.getElementById("orthoSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || b.disabled) return;
+  orthoMode = b.dataset.v; pressed(e.currentTarget, orthoMode); syncOrtho();
+  if (orthoMode === "flat" && cur) topView(cur.m);
+});
+function topView(m) {
+  const span = Math.max(m.width, m.height), fit = 1.25 / Math.min(1, camera.aspect);
+  controls.target.set(0, 0, 0);
+  camera.position.set(0, span * 1.35 * fit + m.zrange[1] * state.exag, 0.01);
+  camera.updateProjectionMatrix(); controls.update();
+}
+document.getElementById("topView").onclick = () => { if (cur) topView(cur.m); };
+const orthoDlg = document.getElementById("orthoDlg");
+document.getElementById("orthoFull").onclick = () => {
+  const p = plotKey(state.plot); if (!HAS_ORTHO[p]) return;
+  document.getElementById("orthoTitle").textContent = T("orthoTitle", p);
+  document.getElementById("orthoCap").textContent = T("orthoCap", p);
+  const im = document.getElementById("orthoImg"); im.src = `data/ortho_${p}.jpg`; im.alt = T("orthoTitle", p);
+  orthoDlg.showModal();
+};
+document.getElementById("orthoClose").onclick = () => orthoDlg.close();
+orthoDlg.addEventListener("click", e => { if (e.target === orthoDlg) orthoDlg.close(); });
+document.getElementById("showPts").onchange = e => { if (points) points.visible = e.target.checked; };
+document.getElementById("showRing").onchange = e => { if (ring) ring.visible = e.target.checked; };
+document.getElementById("showHerp").onchange = e => { if (herps) herps.visible = e.target.checked; };
+document.getElementById("showProp").onchange = e => { if (prop) prop.visible = e.target.checked; };
+document.getElementById("showChan").onchange = e => { if (chan) chan.visible = e.target.checked; };
+document.getElementById("herpFile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rows = (await f.text()).split(/\r?\n/).map(r => r.split(",").map(v => v.trim())).filter(r => r.length >= 2);
+  const head = rows[0].map(v => v.toLowerCase()), ie = head.indexOf("easting"), inn = head.indexOf("northing");
+  const note = document.getElementById("herpNote");
+  if (ie < 0 || inn < 0) { note.textContent = T("herpNeedCols"); return; }
+  herpUTM = rows.slice(1).map(r => [parseFloat(r[ie]), parseFloat(r[inn])]).filter(([a, b]) => isFinite(a) && isFinite(b));
+  drawHerps();
+};
+function drawHerps() {
+  if (!cur) return;
+  if (herps) { world.remove(herps); herps.userData.dispose(); }
+  herps = buildHerps(cur, state.plot); herps.visible = document.getElementById("showHerp").checked; world.add(herps);
+  const note = document.getElementById("herpNote");
+  if (herpUTM.length) note.textContent = T("herpLoaded", herpUTM.length, herps.userData.count);
+}
+
+function renderDtmButtons(m) {
+  dtmSeg.innerHTML = "";
+  ["none", ...m.filters].forEach(f => {
+    const b = document.createElement("button"); b.dataset.v = f; b.textContent = f === "none" ? T("hide") : f.toUpperCase();
+    b.setAttribute("aria-pressed", String(f === state.dtm)); dtmSeg.append(b);
+  });
+}
+
+function updateMesh() {
+  if (mesh) { world.remove(mesh); mesh.geometry.dispose(); mesh = null; }
+  const note = document.getElementById("dtmNote"), m = cur.m, ref = refFilter(m).toUpperCase();
+  if (state.dtm === "none") { note.textContent = T("dtmPick", ref); renderLegend(); return; }
+  mesh = buildMesh(cur, state.dtm); world.add(mesh);
+  if (state.dtm === refFilter(m)) note.textContent = T("dtmRef", ref);
+  else {
+    const st = dtmStats(cur, state.dtm);
+    note.textContent = T("dtmDiff", state.dtm.toUpperCase(), ref, st.median.toFixed(2), st.nmad.toFixed(2), st.p95.toFixed(2));
+  }
+  renderLegend();
+}
+
+function renderLegend() {
+  const L = document.getElementById("legend"); if (!cur) return;
+  let html = "";
+  if (state.color === "ortho") html += `<div class="ttl">${T("lgOrtho")}</div>`;
+  else if (state.color === "strata") html += `<div class="ttl">${T("lgHag")}</div><div class="swatches">${BINS.map((b,i)=>`<span><i style="background:${BIN_COL[i]}"></i>${b}</span>`).join("")}</div>`;
+  else if (state.color === "hag") html += `<div class="ttl">${T("lgHagM")}</div><div class="ramp" style="background:${cssRamp(HAG_STOPS)}"></div><div class="ramp-l"><span>0</span><span>${Math.round(Math.max(10, cur.m.hag_p99))}</span></div>`;
+  else html += `<div class="ttl">${T("lgElev")}</div><div class="ramp" style="background:${cssRamp(ELEV_STOPS)}"></div><div class="ramp-l"><span>0</span><span>${Math.round(cur.m.zrange[1])}</span></div>`;
+  if (state.dtm !== "none" && state.dtm !== refFilter(cur.m)) html += `<div class="ttl">${T("lgDiff")}</div><div class="ramp" style="background:${cssRamp(DIFF_STOPS)}"></div><div class="ramp-l"><span>−1</span><span>0</span><span>+1</span></div>`;
+  L.innerHTML = html;
+}
+
+function renderPanel(k) {
+  const p = Object.assign({}, PLOTS[k], PT(k)), m = META[k], x = PLOTS[k].metrics;
+  document.getElementById("hudName").innerHTML = p.label + (p.flag ? `<span class="flag">${p.flag}</span>` : "");
+  document.getElementById("hudSub").textContent = T("hudSub", p.forest, nfmt(m.n));
+  document.getElementById("facts").innerHTML = [
+    [T("fForest"), p.forest], [T("fFlight"), p.note], [T("fExtent"), `${m.width.toFixed(0)} × ${m.height.toFixed(0)} ${T("m")}`],
+    [T("fRelief"), `${m.dtm_relief.toFixed(1)} ${T("m")}`], [T("fCov2"), `${(x.cover2*100).toFixed(1)} %`],
+    [T("fCov5"), `${(x.cover5*100).toFixed(1)} %`], [T("fHp95"), `${x.hp95.toFixed(1)} ${T("m")}`], [T("fChm"), `${x.chm95.toFixed(1)} ${T("m")}`],
+  ].map(([a,b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("");
+  const [cid, ce, cn] = CAMS[k];
+  document.getElementById("camFacts").innerHTML = [
+    [T("cCam"), cid], [T("cPos"), `E ${ce.toFixed(1)}, N ${cn.toFixed(1)}`],
+    [T("cStatus"), k.startsWith("P4") ? T("stP4") : T("stOther")],
+  ].map(([a,b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("");
+  const rowsB = BUF[k.startsWith("P4") ? "P4" : k];
+  document.getElementById("camTable").innerHTML = `<tr><th>${T("tRun")}</th><th style="text-align:right">r (m)</th><th style="text-align:right">${T("tCover")}</th><th style="text-align:right">0–2 m</th><th style="text-align:right">10–20 m</th><th style="text-align:right">p95 (m)</th></tr>` +
+    rowsB.map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="n">${(r[2]*100).toFixed(1)}%</td><td class="n">${(r[3]*100).toFixed(1)}%</td><td class="n">${(r[6]*100).toFixed(1)}%</td><td class="n">${r[8].toFixed(1)}</td></tr>`).join("");
+  const hp = HERP_PROP[k.split("_")[0]] || [];
+  document.getElementById("herpTable").innerHTML = `<tr><th>${T("tPoint")}</th><th style="text-align:right">${T("tElev")}</th><th style="text-align:right">TPI (m)</th><th style="text-align:right">TWI</th><th style="text-align:right">${T("tUp")}</th></tr>` +
+    hp.map(r => `<tr><td style="font-family:var(--font-data)">${r[0]}</td><td class="n">${r[3]}</td><td class="n">${r[4].toFixed(1)}</td><td class="n">${r[5].toFixed(1)}</td><td class="n">${r[6].toLocaleString("en")}</td></tr>`).join("");
+  const mx = Math.max(...x.s);
+  document.getElementById("strataBars").innerHTML = x.s.map((v,i) =>
+    `<div class="bar"><span class="k">${BINS[i]}</span><span class="t"><b style="width:${v/mx*100}%;background:${BIN_COL[i]}"></b></span><span class="v">${(v*100).toFixed(1)}%</span></div>`).join("");
+  document.getElementById("dtmTable").innerHTML = `<tr><th>${T("tPair")}</th><th style="text-align:right">NMAD</th><th style="text-align:right">p95 |Δz|</th></tr>` +
+    AGREE[k].map(([a,b,c]) => `<tr><td>${a}</td><td class="n">${b.toFixed(3)}</td><td class="n">${c.toFixed(2)}</td></tr>`).join("");
+}
+
+async function selectPlot(k) {
+  state.plot = k; pressed(plotSeg, k); renderPanel(k); if (typeof renderSpThisPlot === "function") renderSpThisPlot();
+  statusEl.hidden = false; statusEl.textContent = T("loading");
+  try {
+    cur = await load(k);
+    if (state.plot !== k) return;
+    if (!cur.m.filters.includes(state.dtm)) state.dtm = "none";
+    [points, mesh].forEach(o => { if (o) { world.remove(o); o.geometry.dispose(); } });
+    if (ring) { world.remove(ring); ring.userData.dispose(); }
+    mesh = null;
+    points = buildPoints(cur); points.visible = document.getElementById("showPts").checked; world.add(points);
+    ring = buildCamera(cur, k); ring.visible = document.getElementById("showRing").checked; world.add(ring);
+    [prop, chan].forEach(o => { if (o) { world.remove(o); o.userData.dispose(); } });
+    prop = buildProposed(cur, k); prop.visible = document.getElementById("showProp").checked; world.add(prop);
+    chan = buildChannels(cur, k); chan.visible = document.getElementById("showChan").checked; world.add(chan);
+    drawHerps();
+    syncOrthoUi(); syncOrtho();
+    if (state.color === "ortho") await loadOrtho(plotKey(k)).catch(() => {});
+    renderDtmButtons(cur.m); colorPoints(); updateMesh(); frame(cur.m);
+    statusEl.hidden = true;
+  } catch (err) { statusEl.textContent = err.message; }
+}
+
+const SPECIES = [
+["bird", "Aegithina tiphia", "นกขมิ้นน้อยธรรมดา", "Common Iora", "LC", "Canopy", "Confirmed", "sight", "", "", 0, "P3"],
+["bird", "Anthracoceros albirostris", "นกแก๊ก, นกแกง", "Oriental Pied Hornbill", "LC", "Canopy", "Confirmed", "sign", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Ducula aenea", "นกลุมพูเขียว", "Green Imperial Pigeon", "LC", "Canopy", "Expected", "sign", "", "", 0, "P2"],
+["bird", "Gallus gallus", "ไก่ป่า", "Red Junglefowl", "LC", "Ground", "Confirmed", "sign", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Garrulax leucolophus", "นกกะรางหัวหงอก", "White-crested Laughingthrush", "LC", "Understorey", "Confirmed", "sight", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Kittacincla malabarica", "นกกางเขนดง", "White-rumped Shama", "LC", "Understorey", "Confirmed", "sight", "Copsychus malabaricus", "", 0, "P2"],
+["bird", "Psilopogon haemacephalus", "นกตีทอง", "Coppersmith Barbet", "LC", "Canopy", "Confirmed", "sign", "Megalaima haemacephala", "", 0, "P3"],
+["bird", "Psilopogon lineatus", "นกโพระดกธรรมดา", "Lineated Barbet", "LC", "Canopy", "Confirmed", "sign", "Megalaima lineata", "", 0, "P3"],
+["bird", "Rubigula flaviventris", "นกปรอดเหลืองหัวจุก", "Black-crested Bulbul", "LC", "Midstorey", "Confirmed", "sign", "Pycnonotus melanicterus", "", 0, "P1 P2 P3 P4"],
+["bird", "Caprimulgus asiaticus", "นกตบยุงเล็ก", "Indian Nightjar", "LC", "", "", "sight", "", "", 0, ""],
+["bird", "Cymbirhynchus macrorhynchos", "นกพญาปากกว้างท้องแดง", "Black-and-red Broadbill", "LC", "", "", "sight", "", "", 0, ""],
+["bird", "Dryocopus javensis", "นกหัวขวานใหญ่สีดำ", "White-bellied Woodpecker", "LC", "", "", "sign", "", "", 0, ""],
+["bird", "Erythrura prasina", "นกกระติ๊ดเขียว", "Pin-tailed Parrotfinch", "LC", "", "", "sight", "", "", 0, ""],
+["bird", "Francolinus pintadeanus", "นกกระทาทุ่ง", "Chinese Francolin", "LC", "", "", "sign", "", "", 0, ""],
+["bird", "Geopelia striata", "นกเขาชวา", "Zebra Dove", "LC", "", "", "sight", "", "", 0, ""],
+["bird", "Lophura diardi", "ไก่ฟ้าพญาลอ", "Siamese Fireback", "LC", "", "", "sign", "", "", 0, ""],
+["bird", "Lophura leucomelanos", "ไก่ฟ้าหลังเทา", "Kalij Pheasant", "LC", "", "", "sign", "", "", 0, ""],
+["bird", "Muscicapa dauurica", "นกจับแมลงสีน้ำตาล", "Asian Brown Flycatcher", "LC", "", "", "sight", "", "", 0, ""],
+["bird", "Pycnonotus conradi", "นกปรอดหน้านวล", "Streak-eared Bulbul", "LC", "", "", "sight", "Pycnonotus blanfordi", "", 0, ""],
+["bird", "Upupa epops", "นกกะรางหัวขวาน", "Eurasian Hoopoe", "LC", "", "", "sight", "", "", 0, ""],
+["bird", "Alophoixus pallidus", "นกปรอดโอ่งเมืองเหนือ", "Puff-throated Bulbul", "LC", "Midstorey", "Expected", "", "", "", 0, "P1"],
+["bird", "Arachnothera longirostra", "นกปลีกล้วยเล็ก", "Little Spiderhunter", "LC", "Understorey", "Expected", "", "", "", 0, "P2"],
+["bird", "Buceros bicornis", "นกกก, นกกาฮัง", "Great Hornbill", "VU", "Canopy", "Expected", "", "", "", 0, "P2"],
+["bird", "Centropus sinensis", "นกกระปูดใหญ่", "Greater Coucal", "LC", "Understorey", "Confirmed", "", "", "", 0, "P3"],
+["bird", "Chalcophaps indica", "นกเขาเขียว", "Grey-capped Emerald Dove", "LC", "Ground", "Confirmed", "", "", "", 0, "P2"],
+["bird", "Chloropsis aurifrons", "นกเขียวก้านตองหน้าผากสีทอง", "Golden-fronted Leafbird", "LC", "Canopy", "Confirmed", "", "", "", 0, "P3"],
+["bird", "Copsychus saularis", "นกกางเขนบ้าน", "Oriental Magpie-Robin", "LC", "Understorey", "Confirmed", "", "", "", 0, "P3"],
+["bird", "Coracias affinis", "นกตะขาบทุ่ง", "Indochinese Roller", "LC", "Aerial", "Confirmed", "", "", "", 0, "P3"],
+["bird", "Dicaeum cruentatum", "นกสีชมพูสวน", "Scarlet-backed Flowerpecker", "LC", "Canopy", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Dicrurus leucophaeus", "นกแซงแซวสีเทา", "Ashy Drongo", "LC", "Canopy", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Dicrurus paradiseus", "นกแซงแซวหางบ่วงใหญ่", "Greater Racket-tailed Drongo", "LC", "Midstorey", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Dinopium javanense", "นกหัวขวานสามนิ้วหลังทอง", "Common Flameback", "LC", "Midstorey", "Confirmed", "", "", "", 0, "P3"],
+["bird", "Ficedula albicilla", "นกจับแมลงคอแดง", "Taiga Flycatcher", "LC", "Midstorey", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Harpactes erythrocephalus", "นกขุนแผนหัวแดง", "Red-headed Trogon", "LC", "Midstorey", "Expected", "", "", "", 0, "P1"],
+["bird", "Hemiprocne coronata", "นกแอ่นฟ้าหงอน", "Crested Treeswift", "LC", "Aerial", "Expected", "", "", "", 0, "P3"],
+["bird", "Hydrornis cyaneus", "นกแต้วแล้วสีน้ำเงิน", "Blue Pitta", "LC", "Ground", "Expected", "", "", "", 0, "P1"],
+["bird", "Hypothymis azurea", "นกจับแมลงจุกดำ", "Black-naped Monarch", "LC", "Midstorey", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Irena puella", "นกเขียวคราม", "Asian Fairy-bluebird", "LC", "Canopy", "Expected", "", "", "", 0, "P2"],
+["bird", "Lophura nycthemera", "ไก่ฟ้าหลังขาว", "Silver Pheasant", "LC", "Ground", "Expected", "", "", "", 0, "P1"],
+["bird", "Merops leschenaulti", "นกจาบคาหัวสีส้ม", "Chestnut-headed Bee-eater", "LC", "Aerial", "Confirmed", "", "", "", 0, "P3"],
+["bird", "Mixornis gularis", "นกกินแมลงอกเหลือง", "Pin-striped Tit-Babbler", "LC", "Understorey", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Oriolus chinensis", "นกขมิ้นท้ายทอยดำ", "Black-naped Oriole", "LC", "Canopy", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Orthotomus sutorius", "นกกระจิบธรรมดา", "Common Tailorbird", "LC", "Understorey", "Confirmed", "", "", "", 0, "P3"],
+["bird", "Pellorneum ruficeps", "นกจาบดินอกลาย", "Puff-throated Babbler", "LC", "Ground", "Expected", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Pericrocotus speciosus", "นกพญาไฟใหญ่", "Scarlet Minivet", "LC", "Canopy", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Phaenicophaeus tristis", "นกบั้งรอกใหญ่", "Green-billed Malkoha", "LC", "Midstorey", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Phylloscopus inornatus", "นกกระจิ๊ดธรรมดา", "Yellow-browed Warbler", "LC", "Midstorey", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Picus chlorolophus", "นกหัวขวานเล็กหงอนเหลือง", "Lesser Yellownape", "LC", "Midstorey", "Expected", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Pitta moluccensis", "นกแต้วแล้วธรรมดา", "Blue-winged Pitta", "LC", "Ground", "Expected", "", "", "", 0, "P3"],
+["bird", "Pycnonotus aurigaster", "นกปรอดหัวสีเขม่า", "Sooty-headed Bulbul", "LC", "Understorey", "Confirmed", "", "", "", 0, "P3"],
+["bird", "Rhipidura albicollis", "นกอีแพรดคอขาว", "White-throated Fantail", "LC", "Understorey", "Expected", "", "", "", 0, "P1"],
+["bird", "Sitta frontalis", "นกไต่ไม้หน้าผากกำมะหยี่", "Velvet-fronted Nuthatch", "LC", "Midstorey", "Expected", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Spilornis cheela", "เหยี่ยวรุ้ง", "Crested Serpent Eagle", "LC", "Aerial", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["bird", "Treron curvirostra", "นกเขาเปล้าธรรมดา", "Thick-billed Green Pigeon", "LC", "Canopy", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Macaca leonina", "ลิงกัง", "Northern Pig-tailed Macaque", "VU", "Semi-arboreal", "Confirmed", "sign", "Macaca nemestrina", "", 0, "P1 P2 P3 P4"],
+["mm", "Manis javanica", "ลิ่นชวา", "Sunda Pangolin", "CR", "Ground", "Expected", "sign", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Muntiacus vaginalis", "เก้ง", "Northern Red Muntjac", "LC", "Ground", "Confirmed", "sign", "Muntiacus muntjak", "", 0, "P1 P2 P3 P4"],
+["mm", "Paradoxurus hermaphroditus", "อีเห็นธรรมดา", "Common Palm Civet", "LC", "Semi-arboreal", "Confirmed", "sign", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Rusa unicolor", "กวางป่า", "Sambar", "VU", "Ground", "Expected", "sign", "Cervus unicolor", "", 0, "P1 P2 P3 P4"],
+["mm", "Sus scrofa", "หมูป่า", "Wild Boar", "LC", "Ground", "Confirmed", "sign", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Tragulus kanchil", "กระจงเล็ก", "Lesser Mouse-deer", "LC", "Ground", "Expected", "sign", "Tragulus javanicus", "", 0, "P2"],
+["mm", "Atherurus macrourus", "เม่นหางพวง", "Asiatic Brush-tailed Porcupine", "LC", "", "", "sign", "", "", 0, ""],
+["mm", "Callosciurus erythraeus", "กระรอกท้องแดง", "Pallas's Squirrel", "LC", "", "", "sight", "", "", 0, ""],
+["mm", "Capricornis sumatraensis", "เลียงผา", "Mainland Serow", "VU", "", "", "sign", "", "สัตว์ป่าสงวน", 0, ""],
+["mm", "Rhizomys sp.", "อ้น", "Bamboo rat", "", "", "", "sign", "Macaca sp.", "ต้นฉบับเขียนชื่อวิทยาศาสตร์คลาดเคลื่อน ใช้ชื่อไทยเป็นหลัก", 0, ""],
+["mm", "Tamiops mcclellandii", "กระถิก", "Himalayan Striped Squirrel", "LC", "", "", "sign", "", "", 0, ""],
+["mm", "Ursidae sp.", "หมี (ไม่ระบุชนิด)", "Bear (species not identified)", "", "", "", "sign", "Ursus sp.", "ระบุถึงสกุลเท่านั้น", 0, ""],
+["mm", "Viverra sp.", "ชะมด (ไม่ระบุชนิด)", "Civet (Viverra, species not identified)", "", "", "", "sign", "", "ระบุถึงสกุลเท่านั้น", 0, ""],
+["mm", "Bos gaurus", "กระทิง", "Gaur", "VU", "Ground", "Expected", "", "", "", 0, "P2"],
+["mm", "Callosciurus finlaysonii", "กระรอกหลากสี", "Variable Squirrel", "LC", "Arboreal", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Cuon alpinus", "หมาใน", "Dhole", "EN", "Ground", "Expected", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Cynopterus sphinx", "", "Greater Short-nosed Fruit Bat", "LC", "Arboreal", "Expected", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Elephas maximus", "ช้างเอเชีย", "Asian Elephant", "EN", "Ground", "Expected", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Hylobates lar", "ชะนีมือขาว", "Lar Gibbon", "EN", "Arboreal", "Expected", "", "", "", 0, "P2"],
+["mm", "Hystrix brachyura", "เม่นใหญ่แผงคอยาว", "Malayan Porcupine", "LC", "Ground", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Lepus peguensis", "กระต่ายป่า", "Burmese Hare", "LC", "Ground", "Expected", "", "", "", 0, "P3"],
+["mm", "Martes flavigula", "หมาไม้", "Yellow-throated Marten", "LC", "Semi-arboreal", "Expected", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Menetes berdmorei", "กระรอกดินข้างลาย", "Indochinese Ground Squirrel", "LC", "Ground", "Expected", "", "", "", 0, "P3"],
+["mm", "Paguma larvata", "อีเห็นเครือ", "Masked Palm Civet", "LC", "Semi-arboreal", "Expected", "", "", "", 0, "P1"],
+["mm", "Panthera pardus", "เสือดาว", "Leopard", "VU", "Ground", "Expected", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Prionailurus bengalensis", "แมวดาว", "Leopard Cat", "LC", "Ground", "Confirmed", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Trachypithecus obscurus", "ค่างแว่นถิ่นใต้", "Dusky Langur", "EN", "Arboreal", "Expected", "", "", "", 0, "P2"],
+["mm", "Ursus thibetanus", "หมีควาย", "Asian Black Bear", "VU", "Ground", "Expected", "", "", "", 0, "P1 P2 P3 P4"],
+["mm", "Urva urva", "พังพอนกินปู", "Crab-eating Mongoose", "LC", "Ground", "Expected", "", "", "", 0, "P2"],
+["mm", "Viverricula indica", "ชะมดเช็ด", "Small Indian Civet", "LC", "Ground", "Expected", "", "", "", 0, "P3"],
+["herp", "Duttaphrynus melanostictus", "คางคกบ้าน", "Asian Common Toad", "LC", "Leaf litter", "Listed", "sight", "Bufo melanostictus", "", 0, "P1 P2 P3 P4"],
+["herp", "Ophiophagus hannah", "งูจงอาง", "King Cobra", "VU", "Leaf litter", "Listed", "sight", "", "", 1, "P1 P2 P3 P4"],
+["herp", "Ingerophrynus parvus", "คางคกแคระ", "Lesser Stream Toad", "LC", "", "", "sight", "Bufo parvus", "", 0, ""],
+["herp", "Varanus nebulosus", "ตะกวด", "Clouded Monitor", "", "", "", "sight", "", "", 0, ""],
+["herp", "Calotes emma", "", "Forest Crested Lizard", "LC", "Arboreal", "Listed", "", "", "", 0, "P1 P2 P3 P4"],
+["herp", "Cuora mouhotii", "", "Keeled Box Turtle", "EN", "Leaf litter", "Listed", "", "", "", 1, "P2"],
+["herp", "Draco maculatus", "", "Spotted Flying Dragon", "LC", "Arboreal", "Listed", "", "", "", 0, "P2"],
+["herp", "Eutropis macularius", "", "Bronze Grass Skink", "LC", "Leaf litter", "Listed", "", "", "", 0, "P3"],
+["herp", "Gekko gecko", "ตุ๊กแกบ้าน", "Tokay Gecko", "LC", "Rock-crevice", "Listed", "", "", "", 0, "P1 P2 P3 P4"],
+["herp", "Heosemys grandis", "", "Giant Asian Pond Turtle", "VU", "Stream", "Listed", "", "", "", 1, "P2"],
+["herp", "Ichthyophis kohtaoensis", "", "Koh Tao Caecilian", "LC", "Fossorial", "Listed", "", "", "", 0, "P2"],
+["herp", "Indotestudo elongata", "เต่าเหลือง", "Elongated Tortoise", "CR", "Leaf litter", "Listed", "", "", "", 1, "P3"],
+["herp", "Kaloula pulchra", "อึ่งอ่างบ้าน", "Banded Bullfrog", "LC", "Fossorial", "Listed", "", "", "", 0, "P3"],
+["herp", "Microhyla fissipes", "อึ่งน้ำเต้า", "Ornamented Pygmy Frog", "LC", "Leaf litter", "Listed", "", "", "", 0, "P3"],
+["herp", "Occidozyga lima", "", "Pointed-tongued Floating Frog", "LC", "Pond-wetland", "Listed", "", "", "", 0, "P3"],
+["herp", "Polypedates leucomystax", "ปาดบ้าน", "Four-lined Tree Frog", "LC", "Arboreal", "Listed", "", "", "", 0, "P1 P2 P3 P4"],
+["herp", "Ptyas korros", "", "Indochinese Rat Snake", "LC", "Leaf litter", "Listed", "", "", "", 0, "P1 P2 P3 P4"],
+["herp", "Python bivittatus", "งูหลาม", "Burmese Python", "VU", "Leaf litter", "Listed", "", "", "", 1, "P1 P2 P3 P4"],
+["herp", "Sphenomorphus maculatus", "", "Streamside Skink", "LC", "Stream", "Listed", "", "", "", 0, "P2"],
+["herp", "Sylvirana nigrovittata", "", "Black-striped Frog", "LC", "Stream", "Listed", "", "", "", 0, "P2"],
+["herp", "Trimeresurus albolabris", "", "White-lipped Pit Viper", "LC", "Arboreal", "Listed", "", "", "", 0, "P1 P2 P3 P4"],
+["herp", "Varanus salvator", "เหี้ย", "Water Monitor", "LC", "Stream", "Listed", "", "", "", 0, "P1 P2 P3 P4"]
+];
+const SP = SPECIES.map(([g, sci, th, en, iucn, layer, mock, lit, src, note, sens, plots]) => ({ g, sci, th, en, iucn, layer, mock, lit, src, note, sens, plots: plots ? plots.split(" ") : [] }));
+const spState = { g: "bird", f: "all", q: "", p: "all" };
+const PLOT4 = ["P1", "P2", "P3", "P4"];
+const plotKey = (k) => k.split("_")[0];
+const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function renderSpCards() {
+  document.getElementById("spCards").innerHTML = ["bird", "mm", "herp"].map(g => {
+    const a = SP.filter(r => r.g === g);
+    return `<button data-g="${g}"><b>${a.length}</b><span class="nm">${T(g === "bird" ? "gBird" : g === "mm" ? "gMm" : "gHerp")}</span><span>${T("spCard", a.filter(r => r.lit).length, a.filter(r => r.mock).length)}</span></button>`;
+  }).join("");
+}
+function renderSpTable() {
+  pressed(document.getElementById("spGroup"), spState.g); pressed(document.getElementById("spFilter"), spState.f);
+  const q = spState.q.trim().toLowerCase();
+  const inG = SP.filter(r => r.g === spState.g);
+  const rows = inG.filter(r => (spState.f === "all") || (spState.f === "lit" && r.lit) || (spState.f === "both" && r.lit && r.mock) || (spState.f === "mock" && r.mock && !r.lit))
+    .filter(r => !q || [r.sci, r.th, r.en].join(" ").toLowerCase().includes(q))
+    .filter(r => spState.p === "all" || r.plots.includes(spState.p));
+  pressed(document.getElementById("spPlot"), spState.p);
+  const LT = T("layerT"), MT = T("mockT"), LiT = T("litT");
+  const nm = (r) => LANG === "th"
+    ? `<b>${esc(r.th || r.en)}</b>${r.th && r.en ? `<div class="sub">${esc(r.en)}</div>` : ""}`
+    : `<b>${esc(r.en || r.th)}</b>${r.th && r.en ? `<div class="sub">${esc(r.th)}</div>` : ""}`;
+  document.getElementById("spTable").innerHTML =
+    `<tr><th>#</th><th>${T("thName")}</th><th>${T("thSci")}</th><th>${T("thIucn")}</th><th>${T("thLayer")}</th><th>${T("thLit")}</th><th>${T("thMock")}</th>${PLOT4.map(p => `<th style="text-align:center">${p}</th>`).join("")}<th>${T("thNote")}</th></tr>` +
+    rows.map((r, i) => `<tr><td class="n">${i + 1}</td><td>${nm(r)}</td><td class="sci">${esc(r.sci)}</td><td style="font-family:var(--font-data)">${esc(r.iucn || "—")}</td>` +
+      `<td>${esc(LT[r.layer] || r.layer || "—")}</td>` +
+      `<td>${r.lit ? `<span class="badge b-lit">${LiT[r.lit]}</span>` : "—"}</td>` +
+      `<td>${r.mock ? `<span class="badge b-mock">MOCK</span> <span class="sub">${esc(MT[r.mock] || r.mock)}</span>` : "—"}</td>` +
+      PLOT4.map(p => `<td style="text-align:center;font-family:var(--font-data)">${r.plots.includes(p) ? `<span title="MOCK" style="color:#c0392b">●</span>` : `<span class="sub">·</span>`}</td>`).join("") +
+      `<td class="sub">${[r.src ? T("srcT", esc(r.src)) : "", r.note ? esc(r.note) : "", r.sens ? T("sensT") : ""].filter(Boolean).join(" · ")}</td></tr>`).join("");
+  document.getElementById("spCount").textContent = (spState.p === "all" ? "" : spState.p + " · ") + T("spCount", rows.length,
+    rows.filter(r => r.lit && !r.mock).length, rows.filter(r => r.lit && r.mock).length, rows.filter(r => r.mock && !r.lit).length);
+}
+function renderSpThisPlot() {
+  const p = plotKey(state.plot), c = (g) => SP.filter(r => r.g === g && r.plots.includes(p)).length;
+  document.getElementById("spThisPlot").textContent = T("spThis", p, c("bird"), c("mm"), c("herp"));
+}
+const spDlg = document.getElementById("spDlg");
+document.getElementById("spThisPlot").onclick = () => { spState.p = plotKey(state.plot); spState.f = "all"; renderSpTable(); spDlg.showModal(); };
+document.getElementById("spPlot").addEventListener("click", e => { const v = e.target.closest("button")?.dataset.v; if (v) { spState.p = v; renderSpTable(); } });
+document.getElementById("spCards").addEventListener("click", e => {
+  const g = e.target.closest("button")?.dataset.g; if (!g) return;
+  spState.g = g; spState.p = "all"; renderSpTable(); spDlg.showModal();
+});
+document.getElementById("spClose").onclick = () => spDlg.close();
+spDlg.addEventListener("click", e => { if (e.target === spDlg) spDlg.close(); });
+document.getElementById("spGroup").addEventListener("click", e => { const v = e.target.closest("button")?.dataset.v; if (v) { spState.g = v; renderSpTable(); } });
+document.getElementById("spFilter").addEventListener("click", e => { const v = e.target.closest("button")?.dataset.v; if (v) { spState.f = v; renderSpTable(); } });
+document.getElementById("spSearch").addEventListener("input", e => { spState.q = e.target.value; renderSpTable(); });
+
+document.getElementById("langSeg").addEventListener("click", e => {
+  const v = e.target.closest("button")?.dataset.v; if (!v || v === LANG) return;
+  LANG = v; try { localStorage.setItem("pilot3d-lang", v); } catch (err) {}
+  applyStatic(); renderPanel(state.plot);
+  if (cur) { renderDtmButtons(cur.m); updateMesh(); drawHerps(); }
+  renderSpCards(); renderSpThisPlot(); syncOrthoUi(); if (spDlg.open) renderSpTable();
+});
+applyStatic(); renderSpCards(); renderSpThisPlot();
+applyTheme(); resize();
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+selectPlot("P1");
+</script>
+
+</body>
+</html>
